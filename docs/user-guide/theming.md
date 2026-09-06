@@ -6,23 +6,25 @@ Cantus features a dynamic theming engine that bridges the visual mood of your mu
 
 ## Dynamic Album Art Palette Extraction
 
-When a new track starts playing, Cantus analyzes the high-resolution album artwork directly in the client and extracts a harmonized color palette:
+When a new track starts playing in **Dynamic** mode, Cantus downloads the album artwork directly in the client and extracts a harmonized color palette from its pixels:
 
 ```mermaid
 flowchart TD
-    Art[Spotify Album Artwork] --> Extract[ColorExtractionHelper]
-    Extract --> Dominant[Dominant Color]
-    Extract --> Accent[Vibrant Complementary Accent]
-    Extract --> Ambient[Ambient Background Gradient]
-    Accent --> ActiveLyric[Active Sung Lyric Highlight]
-    Ambient --> Background[Blurred Glow Background]
+    Art[Spotify Album Artwork] --> Fetch[AlbumArtColorService Fetch + Decode]
+    Fetch --> Quantize[ColorQuantizer Median-Cut Quantization]
+    Quantize --> Swatches[Dominant Color Swatches]
+    Swatches --> Primary[Vibrant Primary Accent]
+    Swatches --> Secondary[Hue-Separated Secondary Accent]
+    Swatches --> Background[Hue-Matched Dark Background]
+    Primary --> ActiveLyric[Active Lyric Glow and Accents]
 ```
 
 ### Color Extraction Principles
 
-1. **High-Contrast Legibility**: The extracted accent color is dynamically checked against WCAG AA contrast standards. If the artwork is too dark or washed out, the algorithm adjusts lightness and saturation to ensure lyrics remain crisp and easily readable from across the room.
-2. **Smooth Cross-Fading**: When changing tracks, the ambient background gradient smoothly transitions over 800ms to avoid abrupt visual flashes.
-3. **Cover Art Bloom**: The background features a subtle, hardware-accelerated frosted glass blur of the album artwork, creating an ambient glow.
+1. **Median-Cut Quantization**: The artwork is downsampled and quantized into up to eight dominant color swatches. Near-black, near-white, and transparent pixels are excluded so letterboxing and vignettes do not skew the palette.
+2. **Vibrancy-Weighted Accent Selection**: The primary accent is the swatch with the best combination of saturation, population, and mid-range lightness. The secondary accent prefers a swatch at least 30 degrees away in hue; grayscale artwork keeps its neutral character instead of being forced into artificial color.
+3. **Legibility Clamping**: Accent saturation and lightness are clamped into ranges that keep lyrics crisp against the hue-matched dark background, regardless of how dark or washed out the artwork is.
+4. **Instant Fallback**: A metadata-derived placeholder palette is applied immediately while extraction runs, and remains active if the artwork cannot be fetched (for example, when offline). Extracted palettes are cached per artwork URL, so revisiting a track re-themes instantly.
 
 ---
 
@@ -32,9 +34,13 @@ You can switch between theme modes by pressing <kbd>T</kbd> on your keyboard or 
 
 | Theme Mode | Description | Ideal Use Case |
 | :--- | :--- | :--- |
-| **Dynamic Palette (Default)** | Adapts colors, glow, and text highlights to match the current album art. | Daily listening, TV living room display, visualizers. |
-| **Dark Slate** | Clean, minimalist deep-charcoal background with crisp Spotify green accents. | Dark room viewing, OLED displays, low eye strain. |
-| **Clean Light** | Crisp high-contrast light theme with dark typography. | Brightly lit offices or sunlit rooms. |
+| **Dynamic Palette** | Adapts colors, glow, and text highlights to match the current album artwork. | Daily listening, TV living room display, visualizers. |
+| **Midnight Violet (Default)** | Deep indigo background with violet accents. | General use, dark rooms. |
+| **Emerald Synth** | Dark slate background with emerald green accents. | Dark room viewing, low eye strain. |
+| **Cyberpunk Sunset** | Dark purple-tinted background with neon rose and amber accents. | High-energy visuals. |
+| **Nordic Slate** | Deep slate-navy background with cyan and sky-blue accents. | Subtle, understated displays. |
+| **OLED Monochrome** | True-black background with white accents. | OLED displays, burn-in avoidance. |
+| **Solarized Dark** | Classic Solarized base tones with blue accents. | Long reading sessions. |
 
 ---
 
