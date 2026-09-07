@@ -160,6 +160,9 @@ public sealed class ThemeManagerTests
         tm.ActivePalette.SurfaceCard.A.Should().Be(204);
         tm.ActivePalette.CardBorder.A.Should().Be(40);
         tm.ActivePalette.GlowColor.A.Should().Be(60);
+
+        // Artwork URL exposed for the ambient backdrop alongside the palette
+        tm.AmbientArtworkUrl.Should().Be(ALBUM_ART_URL);
     }
 
     [Fact]
@@ -178,10 +181,11 @@ public sealed class ThemeManagerTests
         ColorPalette fallbackPalette = tm.ActivePalette;
         await AwaitExtractionAsync(tm);
 
-        // Assert - palette is byte-for-byte the metadata fallback
+        // Assert - palette is byte-for-byte the metadata fallback, with no ambient backdrop
         tm.ActivePalette.Should().Be(fallbackPalette);
         tm.ActivePalette.Should().Be(
             ColorExtractionHelper.GeneratePaletteFromMetadata("Some Track", "Some Artist", ALBUM_ART_URL));
+        tm.AmbientArtworkUrl.Should().BeNull();
     }
 
     [Fact]
@@ -324,10 +328,13 @@ public sealed class ThemeManagerTests
 
         // Act - leave Dynamic mode and come back
         tm.SetThemeMode(ThemeMode.MidnightViolet);
+        string? ambientWhilePreset = tm.AmbientArtworkUrl;
         tm.SetThemeMode(ThemeMode.Dynamic);
 
-        // Assert - artwork palette restored synchronously from cache, no second fetch
+        // Assert - artwork palette and ambient backdrop restored synchronously from cache, no second fetch
+        ambientWhilePreset.Should().BeNull();
         tm.ActivePalette.Should().Be(artworkPalette);
+        tm.AmbientArtworkUrl.Should().Be(ALBUM_ART_URL);
         handler.InvocationCount.Should().Be(1);
     }
 

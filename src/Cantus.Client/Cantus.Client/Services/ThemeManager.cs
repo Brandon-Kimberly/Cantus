@@ -44,6 +44,13 @@ public sealed class ThemeManager : INotifyPropertyChanged
 
     internal Task? ActiveExtractionTask { get; private set; }
 
+    /// <summary>
+    /// URL of the artwork behind the current Dynamic theme, or null when no
+    /// artwork-derived theme is active. Used for the full-screen ambient
+    /// backdrop. Updated before <see cref="PaletteChanged"/> fires.
+    /// </summary>
+    public string? AmbientArtworkUrl { get; private set; }
+
     public ThemeMode CurrentMode
     {
         get => _currentMode;
@@ -207,6 +214,7 @@ public sealed class ThemeManager : INotifyPropertyChanged
 
         CancelPendingExtraction();
         _extractedForUrl = null;
+        AmbientArtworkUrl = null;
 
         ActivePalette = CurrentMode switch
         {
@@ -228,6 +236,7 @@ public sealed class ThemeManager : INotifyPropertyChanged
         {
             CancelPendingExtraction();
             _extractedForUrl = null;
+            AmbientArtworkUrl = null;
             ActivePalette = ColorExtractionHelper.GeneratePaletteFromMetadata(_lastTitle, _lastArtist, albumArtUrl);
             return;
         }
@@ -241,11 +250,13 @@ public sealed class ThemeManager : INotifyPropertyChanged
         {
             CancelPendingExtraction();
             _extractedForUrl = albumArtUrl;
+            AmbientArtworkUrl = albumArtUrl;
             ActivePalette = ColorExtractionHelper.GeneratePaletteFromSwatches(_lastTitle, cachedSwatches);
             return;
         }
 
         // Instant metadata-derived fallback while the artwork colors are extracted.
+        AmbientArtworkUrl = null;
         ActivePalette = ColorExtractionHelper.GeneratePaletteFromMetadata(_lastTitle, _lastArtist, albumArtUrl);
         BeginExtraction(_lastTitle, albumArtUrl);
     }
@@ -287,6 +298,7 @@ public sealed class ThemeManager : INotifyPropertyChanged
                     return;
                 }
 
+                AmbientArtworkUrl = albumArtUrl;
                 ActivePalette = ColorExtractionHelper.GeneratePaletteFromSwatches(title, swatches);
             });
         }

@@ -17,6 +17,7 @@ flowchart TD
     Swatches --> Secondary[Hue-Separated Secondary Accent]
     Swatches --> Background[Hue-Matched Dark Background]
     Primary --> ActiveLyric[Active Lyric Glow and Accents]
+    Art --> Backdrop[Full-Screen Artwork Backdrop Behind Darkening Scrim]
 ```
 
 ### Color Extraction Principles
@@ -24,7 +25,8 @@ flowchart TD
 1. **Median-Cut Quantization**: The artwork is downsampled and quantized into up to eight dominant color swatches. Near-black, near-white, and transparent pixels are excluded so letterboxing and vignettes do not skew the palette.
 2. **Vibrancy-Weighted Accent Selection**: The primary accent is the swatch with the best combination of saturation, population, and mid-range lightness. The secondary accent prefers a swatch at least 30 degrees away in hue; grayscale artwork keeps its neutral character instead of being forced into artificial color.
 3. **Legibility Clamping**: Accent saturation and lightness are clamped into ranges that keep lyrics crisp against the hue-matched dark background, regardless of how dark or washed out the artwork is.
-4. **Instant Fallback**: A metadata-derived placeholder palette is applied immediately while extraction runs, and remains active if the artwork cannot be fetched (for example, when offline). Extracted palettes are cached per artwork URL, so revisiting a track re-themes instantly.
+4. **Ambient Artwork Backdrop**: The full-resolution album cover fills the entire viewport behind a darkening scrim (center-cropped to fit), so different albums produce visibly different rooms — recognizable artwork in the background, with the scrim keeping lyrics comfortably readable on top.
+5. **Instant Fallback**: A metadata-derived placeholder palette is applied immediately while extraction runs, and remains active if the artwork cannot be fetched (for example, when offline). Extracted palettes are cached per artwork URL, so revisiting a track re-themes instantly.
 
 ---
 
