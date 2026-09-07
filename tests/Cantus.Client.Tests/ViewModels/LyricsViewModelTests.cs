@@ -525,5 +525,85 @@ public sealed class LyricsViewModelTests
         // Assert
         vm.AutoScrollToggleVisibility.Should().Be(Visibility.Collapsed);
     }
+
+    [Fact]
+    public void InstrumentalBreakVisibility_RequiresBreakWithSyncedLiveLyrics()
+    {
+        // Arrange - synced lyrics loaded
+        SignalRPlaybackClient client = new();
+        LyricsViewModel vm = new(client);
+        client.RaiseLyricsReceived(new LyricsPayload
+        {
+            TrackId = "t1",
+            Title = "Song",
+            Artist = "Artist",
+            IsSynced = true,
+            Lines = new List<LyricLinePayload>
+            {
+                new() { TimestampMs = 1000, Text = "first" },
+                new() { TimestampMs = 20000, Text = "after the solo" }
+            }
+        });
+        vm.InstrumentalBreakVisibility.Should().Be(Visibility.Collapsed);
+
+        // Act - the tick loop flags a break
+        vm.IsInstrumentalBreak = true;
+        vm.InstrumentalBreakText = "♪ Instrumental Interlude (12s) ♪";
+
+        // Assert
+        vm.InstrumentalBreakVisibility.Should().Be(Visibility.Visible);
+
+        // Act & Assert - static mode hides the indicator even mid-break
+        vm.ToggleStaticLyricsMode();
+        vm.InstrumentalBreakVisibility.Should().Be(Visibility.Collapsed);
+        vm.ToggleStaticLyricsMode();
+        vm.InstrumentalBreakVisibility.Should().Be(Visibility.Visible);
+
+        // Act & Assert - break ends
+        vm.IsInstrumentalBreak = false;
+        vm.InstrumentalBreakVisibility.Should().Be(Visibility.Collapsed);
+    }
+
+    [Fact]
+    public void InstrumentalBreakVisibility_NotifiesOnEveryDependency()
+    {
+        // Arrange - the pill binds this property; every dependency change must
+        // notify it or the indicator strands (same class of bug as the karaoke
+        // toggle's missing notification)
+        SignalRPlaybackClient client = new();
+        LyricsViewModel vm = new(client);
+        client.RaiseLyricsReceived(new LyricsPayload
+        {
+            TrackId = "t1",
+            Title = "Song",
+            Artist = "Artist",
+            IsSynced = true,
+            Lines = new List<LyricLinePayload> { new() { TimestampMs = 1000, Text = "line" } }
+        });
+
+        List<string> notified = new();
+        vm.PropertyChanged += (s, e) => notified.Add(e.PropertyName ?? string.Empty);
+
+        // Act & Assert - break flag flips
+        vm.IsInstrumentalBreak = true;
+        notified.Should().Contain(nameof(LyricsViewModel.InstrumentalBreakVisibility));
+
+        // Act & Assert - static mode toggles
+        notified.Clear();
+        vm.ToggleStaticLyricsMode();
+        notified.Should().Contain(nameof(LyricsViewModel.InstrumentalBreakVisibility));
+
+        // Act & Assert - lyrics reload
+        notified.Clear();
+        client.RaiseLyricsReceived(new LyricsPayload
+        {
+            TrackId = "t2",
+            Title = "Next",
+            Artist = "Artist",
+            IsSynced = true,
+            Lines = new List<LyricLinePayload> { new() { TimestampMs = 500, Text = "another" } }
+        });
+        notified.Should().Contain(nameof(LyricsViewModel.InstrumentalBreakVisibility));
+    }
 }
 

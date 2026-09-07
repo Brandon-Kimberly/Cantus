@@ -121,6 +121,24 @@
                     </ItemsControl>
                 </ScrollViewer>
 
+                <!-- Instrumental Break Indicator: live countdown during gaps of 8s+
+                     between synced lines (computed each tick by the view model) -->
+                <Border Visibility="{x:Bind ViewModel.InstrumentalBreakVisibility, Mode=OneWay}"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Top"
+                        Margin="0,8,0,0"
+                        Background="{x:Bind ViewModel.SurfaceCardBrush, Mode=OneWay}"
+                        BorderBrush="{x:Bind ViewModel.CardBorderBrush, Mode=OneWay}"
+                        BorderThickness="1"
+                        CornerRadius="18"
+                        Padding="14,8"
+                        IsHitTestVisible="False">
+                    <TextBlock Text="{x:Bind ViewModel.InstrumentalBreakText, Mode=OneWay}"
+                               FontSize="13"
+                               FontWeight="SemiBold"
+                               Foreground="{x:Bind ViewModel.TextSecondaryBrush, Mode=OneWay}" />
+                </Border>
+
                 <!-- Floating Resume Autoscroll Button -->
                 <Button x:Name="ResumeAutoScrollButton"
                         Click="OnResumeAutoScrollClicked"
