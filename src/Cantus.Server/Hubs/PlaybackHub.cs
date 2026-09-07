@@ -306,7 +306,49 @@ public sealed class PlaybackHub : Hub<IPlaybackClient>
     /// the wire as an int: the trimmed WASM client cannot deserialize enum
     /// return values, so both ends cast PlayerCommandResult explicitly.
     /// </summary>
-    public async Task<int> SendPlayerCommand(string command)
+    public Task<int> SendPlayerCommand(string command)
+    {
+        return ExecutePlayerActionAsync(command, (token) => command switch
+        {
+            "pause" => _playerClient.PausePlaybackAsync(token),
+            "resume" => _playerClient.ResumePlaybackAsync(token),
+            "next" => _playerClient.SkipToNextAsync(token),
+            "previous" => _playerClient.SkipToPreviousAsync(token),
+            _ => Task.FromResult(PlayerCommandResult.Failed)
+        });
+    }
+
+    public Task<int> SetPlayerVolume(int volumePercent)
+    {
+        return ExecutePlayerActionAsync(
+            "volume",
+            token => _playerClient.SetVolumeAsync(token, volumePercent));
+    }
+
+    public Task<int> SeekPlayback(long positionMs)
+    {
+        return ExecutePlayerActionAsync(
+            "seek",
+            token => _playerClient.SeekPlaybackAsync(token, positionMs));
+    }
+
+    public Task<int> SetShuffle(bool enabled)
+    {
+        return ExecutePlayerActionAsync(
+            "shuffle",
+            token => _playerClient.SetShuffleAsync(token, enabled));
+    }
+
+    public Task<int> SetRepeat(string repeatMode)
+    {
+        return ExecutePlayerActionAsync(
+            "repeat",
+            token => _playerClient.SetRepeatAsync(token, repeatMode));
+    }
+
+    private async Task<int> ExecutePlayerActionAsync(
+        string commandName,
+        Func<string, Task<PlayerCommandResult>> action)
     {
         string? userId = _registry.GetConnectionSubscription(Context.ConnectionId);
         if (string.IsNullOrEmpty(userId))
@@ -320,16 +362,9 @@ public sealed class PlaybackHub : Hub<IPlaybackClient>
             return (int)PlayerCommandResult.Failed;
         }
 
-        _logger.LogInformation("Player command {Command} requested by user {UserId}", command, userId);
+        _logger.LogInformation("Player command {Command} requested by user {UserId}", commandName, userId);
 
-        PlayerCommandResult result = command switch
-        {
-            "pause" => await _playerClient.PausePlaybackAsync(session.AccessToken),
-            "resume" => await _playerClient.ResumePlaybackAsync(session.AccessToken),
-            "next" => await _playerClient.SkipToNextAsync(session.AccessToken),
-            "previous" => await _playerClient.SkipToPreviousAsync(session.AccessToken),
-            _ => PlayerCommandResult.Failed
-        };
+        PlayerCommandResult result = await action(session.AccessToken);
 
         if (result == PlayerCommandResult.Success)
         {

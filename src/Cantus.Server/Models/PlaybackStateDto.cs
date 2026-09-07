@@ -8,6 +8,8 @@ public sealed record PlaybackStateDto
     public DateTimeOffset TimestampUtc { get; init; }
     public string? DeviceName { get; init; }
     public int? VolumePercent { get; init; }
+    public bool IsShuffled { get; init; }
+    public string RepeatMode { get; init; } = "off";
     public string? ActiveUserId { get; init; }
     public string? ActiveUserDisplayName { get; init; }
 }

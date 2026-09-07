@@ -31,6 +31,8 @@ public static class DtoMappingExtensions
             TimestampUtc = state.TimestampUtc,
             DeviceName = state.DeviceName,
             VolumePercent = state.VolumePercent,
+            IsShuffled = state.IsShuffled,
+            RepeatMode = state.RepeatMode,
             ActiveUserId = activeUserId,
             ActiveUserDisplayName = activeUserName
         };

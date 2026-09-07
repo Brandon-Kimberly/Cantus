@@ -54,6 +54,82 @@ public sealed partial class AdaptiveTrackCard : UserControl
         if (ViewModel is not null) await ViewModel.NudgeOffsetAsync(500);
     }
 
+    private async void OnShuffleClicked(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel is not null) await ViewModel.ToggleShuffleAsync();
+    }
+
+    private async void OnRepeatClicked(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel is not null) await ViewModel.CycleRepeatAsync();
+    }
+
+    private const double SEEK_BAR_HEIGHT = 6.0;
+    private const double SEEK_BAR_HOVER_HEIGHT = 8.0;
+
+    private void OnSeekBarPointerEntered(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        SeekHoverThumb.Visibility = Visibility.Visible;
+        SeekProgressBar.Height = SEEK_BAR_HOVER_HEIGHT;
+        PositionSeekThumb(sender, e);
+    }
+
+    private void OnSeekBarPointerMoved(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        PositionSeekThumb(sender, e);
+    }
+
+    private void OnSeekBarPointerExited(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        SeekHoverThumb.Visibility = Visibility.Collapsed;
+        SeekProgressBar.Height = SEEK_BAR_HEIGHT;
+    }
+
+    private void PositionSeekThumb(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement element || element.ActualWidth <= 0)
+        {
+            return;
+        }
+
+        double half = SeekHoverThumb.Width / 2.0;
+        double pointerX = e.GetCurrentPoint(element).Position.X;
+        SeekHoverThumbTransform.X = Math.Clamp(
+            pointerX - half,
+            0,
+            Math.Max(0, element.ActualWidth - SeekHoverThumb.Width));
+    }
+
+    private async void OnProgressBarPointerReleased(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        if (ViewModel is null || sender is not FrameworkElement element || element.ActualWidth <= 0)
+        {
+            return;
+        }
+
+        double fraction = e.GetCurrentPoint(element).Position.X / element.ActualWidth;
+        await ViewModel.SeekToFractionAsync(fraction);
+    }
+
+    private void OnVolumeSliderChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
+    {
+        if (ViewModel is null)
+        {
+            return;
+        }
+
+        int requested = (int)Math.Round(e.NewValue);
+
+        // ValueChanged also fires when the binding pushes a state update into
+        // the slider; only user-initiated changes differ from the bound value.
+        if (requested == (int)Math.Round(ViewModel.VolumeSliderValue))
+        {
+            return;
+        }
+
+        ViewModel.RequestVolumeChange(requested);
+    }
+
     private async void OnSkipPreviousClicked(object sender, RoutedEventArgs e)
     {
         if (ViewModel is not null) await ViewModel.SkipToPreviousAsync();

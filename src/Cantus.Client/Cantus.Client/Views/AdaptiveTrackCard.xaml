@@ -56,15 +56,38 @@
                                    TextTrimming="CharacterEllipsis" />
                     </StackPanel>
 
-                    <!-- Progress Bar & Timestamps -->
+                    <!-- Progress Bar & Timestamps (click to seek; hover shows a scrub thumb) -->
                     <StackPanel Spacing="6">
-                        <ProgressBar Value="{x:Bind ViewModel.ProgressFraction, Mode=OneWay}"
-                                     Minimum="0"
-                                     Maximum="1"
-                                     Foreground="{x:Bind ViewModel.PrimaryAccentBrush, Mode=OneWay}"
-                                     Background="#1AFFFFFF"
-                                     Height="6"
-                                     CornerRadius="3" />
+                        <Grid Background="Transparent"
+                              MinHeight="18"
+                              PointerReleased="OnProgressBarPointerReleased"
+                              PointerEntered="OnSeekBarPointerEntered"
+                              PointerMoved="OnSeekBarPointerMoved"
+                              PointerExited="OnSeekBarPointerExited"
+                              ToolTipService.ToolTip="Seek">
+                            <ProgressBar x:Name="SeekProgressBar"
+                                         Value="{x:Bind ViewModel.ProgressFraction, Mode=OneWay}"
+                                         Minimum="0"
+                                         Maximum="1"
+                                         Foreground="{x:Bind ViewModel.PrimaryAccentBrush, Mode=OneWay}"
+                                         Background="#1AFFFFFF"
+                                         Height="6"
+                                         CornerRadius="3"
+                                         VerticalAlignment="Center"
+                                         IsHitTestVisible="False" />
+                            <Ellipse x:Name="SeekHoverThumb"
+                                     Width="12"
+                                     Height="12"
+                                     Fill="{x:Bind ViewModel.PrimaryAccentBrush, Mode=OneWay}"
+                                     Visibility="Collapsed"
+                                     HorizontalAlignment="Left"
+                                     VerticalAlignment="Center"
+                                     IsHitTestVisible="False">
+                                <Ellipse.RenderTransform>
+                                    <TranslateTransform x:Name="SeekHoverThumbTransform" />
+                                </Ellipse.RenderTransform>
+                            </Ellipse>
+                        </Grid>
                         <Grid ColumnDefinitions="*,*">
                             <TextBlock Grid.Column="0" Text="{x:Bind ViewModel.ProgressText, Mode=OneWay}" FontSize="12" Foreground="{x:Bind ViewModel.TextMutedBrush, Mode=OneWay}" FontFamily="Consolas" />
                             <TextBlock Grid.Column="1" Text="{x:Bind ViewModel.TotalDurationText, Mode=OneWay}" FontSize="12" Foreground="{x:Bind ViewModel.TextMutedBrush, Mode=OneWay}" FontFamily="Consolas" HorizontalAlignment="Right" />
@@ -72,8 +95,20 @@
                     </StackPanel>
 
                     <!-- Playback Transport Controls -->
-                    <Grid ColumnDefinitions="*,Auto,Auto,Auto,*" ColumnSpacing="12">
+                    <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto,*" ColumnSpacing="12">
                         <Button Grid.Column="1"
+                                Click="OnShuffleClicked"
+                                Background="Transparent"
+                                Foreground="{x:Bind ViewModel.ShuffleButtonForeground, Mode=OneWay}"
+                                CornerRadius="16"
+                                Width="32"
+                                Height="32"
+                                Padding="0"
+                                VerticalAlignment="Center"
+                                ToolTipService.ToolTip="Shuffle">
+                            <FontIcon Glyph="&#xE8B1;" FontSize="14" />
+                        </Button>
+                        <Button Grid.Column="2"
                                 Click="OnSkipPreviousClicked"
                                 Background="#20FFFFFF"
                                 Foreground="{x:Bind ViewModel.TextPrimaryBrush, Mode=OneWay}"
@@ -84,7 +119,7 @@
                                 ToolTipService.ToolTip="Previous track">
                             <FontIcon Glyph="&#xE892;" FontSize="14" />
                         </Button>
-                        <Button Grid.Column="2"
+                        <Button Grid.Column="3"
                                 Click="OnTogglePlayPauseClicked"
                                 Background="{x:Bind ViewModel.PrimaryAccentBrush, Mode=OneWay}"
                                 Foreground="White"
@@ -95,7 +130,7 @@
                                 ToolTipService.ToolTip="Play / Pause">
                             <FontIcon Glyph="{x:Bind ViewModel.PlayPauseGlyph, Mode=OneWay}" FontSize="18" />
                         </Button>
-                        <Button Grid.Column="3"
+                        <Button Grid.Column="4"
                                 Click="OnSkipNextClicked"
                                 Background="#20FFFFFF"
                                 Foreground="{x:Bind ViewModel.TextPrimaryBrush, Mode=OneWay}"
@@ -106,6 +141,43 @@
                                 ToolTipService.ToolTip="Next track">
                             <FontIcon Glyph="&#xE893;" FontSize="14" />
                         </Button>
+                        <Button Grid.Column="5"
+                                Click="OnRepeatClicked"
+                                Background="Transparent"
+                                Foreground="{x:Bind ViewModel.RepeatButtonForeground, Mode=OneWay}"
+                                CornerRadius="16"
+                                Width="32"
+                                Height="32"
+                                Padding="0"
+                                VerticalAlignment="Center"
+                                ToolTipService.ToolTip="Repeat">
+                            <FontIcon Glyph="{x:Bind ViewModel.RepeatGlyph, Mode=OneWay}" FontSize="14" />
+                        </Button>
+                    </Grid>
+
+                    <!-- Volume -->
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                        <FontIcon Grid.Column="0"
+                                  Glyph="&#xE767;"
+                                  FontSize="14"
+                                  Foreground="{x:Bind ViewModel.TextMutedBrush, Mode=OneWay}"
+                                  VerticalAlignment="Center" />
+                        <Slider Grid.Column="1"
+                                Minimum="0"
+                                Maximum="100"
+                                StepFrequency="1"
+                                Value="{x:Bind ViewModel.VolumeSliderValue, Mode=OneWay}"
+                                ValueChanged="OnVolumeSliderChanged"
+                                VerticalAlignment="Center"
+                                ToolTipService.ToolTip="Volume" />
+                        <TextBlock Grid.Column="2"
+                                   Text="{x:Bind ViewModel.VolumeText, Mode=OneWay}"
+                                   FontSize="12"
+                                   Foreground="{x:Bind ViewModel.TextMutedBrush, Mode=OneWay}"
+                                   FontFamily="Consolas"
+                                   VerticalAlignment="Center"
+                                   MinWidth="34"
+                                   TextAlignment="Right" />
                     </Grid>
 
                     <!-- Transport Command Feedback -->
