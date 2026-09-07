@@ -134,3 +134,18 @@ public sealed record ColorPalette(
         _ => MidnightViolet
     };
 }
+
+public static class ThemeModeExtensions
+{
+    public static string GetDisplayName(this ThemeMode mode) => mode switch
+    {
+        ThemeMode.Dynamic => "Dynamic Palette",
+        ThemeMode.MidnightViolet => "Midnight Violet",
+        ThemeMode.EmeraldSynth => "Emerald Synth",
+        ThemeMode.CyberpunkSunset => "Cyberpunk Sunset",
+        ThemeMode.NordicSlate => "Nordic Slate",
+        ThemeMode.OLEDMonochrome => "OLED Monochrome",
+        ThemeMode.SolarizedDark => "Solarized Dark",
+        _ => mode.ToString()
+    };
+}
