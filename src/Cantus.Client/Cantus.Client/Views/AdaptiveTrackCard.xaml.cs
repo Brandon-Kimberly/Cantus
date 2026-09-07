@@ -52,6 +52,21 @@ public sealed partial class AdaptiveTrackCard : UserControl
         if (ViewModel is not null) await ViewModel.NudgeOffsetAsync(500);
     }
 
+    private async void OnSkipPreviousClicked(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel is not null) await ViewModel.SkipToPreviousAsync();
+    }
+
+    private async void OnTogglePlayPauseClicked(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel is not null) await ViewModel.TogglePlayPauseAsync();
+    }
+
+    private async void OnSkipNextClicked(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel is not null) await ViewModel.SkipToNextAsync();
+    }
+
     private async void OnConnectSpotifyClicked(object sender, RoutedEventArgs e)
     {
         try

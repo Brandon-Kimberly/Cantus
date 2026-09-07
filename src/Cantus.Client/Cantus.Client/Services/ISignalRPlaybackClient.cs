@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Cantus.Core.Logging;
+using Cantus.Core.Models;
 using Microsoft.AspNetCore.SignalR.Client;
 
 namespace Cantus.Client.Services;
@@ -32,6 +33,7 @@ public interface ISignalRPlaybackClient : IAsyncDisposable
     Task<bool> TryConnectAsync(CancellationToken cancellationToken = default);
     Task SyncClockAsync();
     Task SetTrackOffsetAsync(string trackId, int offsetMs);
+    Task<PlayerCommandResult> SendPlayerCommandAsync(string command);
     Task SubscribeToUserAsync(string? userId);
     Task LogoutAsync();
     Task ReconnectWithTokenAsync(string? sessionToken);

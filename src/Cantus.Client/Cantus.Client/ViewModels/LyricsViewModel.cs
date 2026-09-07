@@ -48,6 +48,10 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
     private string _deviceName = "Spotify";
     private int? _volumePercent;
 
+    private const int TRANSPORT_STATUS_DURATION_MS = 8000;
+    private readonly DispatcherTimer _transportStatusTimer;
+    private string _transportStatusText = string.Empty;
+
     private double _progressFraction;
     private string _progressText = "00:00";
     private string _totalDurationText = "00:00";
@@ -205,7 +209,107 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
     public bool IsPlaying
     {
         get => _isPlaying;
-        set { if (_isPlaying != value) { _isPlaying = value; OnPropertyChanged(); } }
+        set
+        {
+            if (_isPlaying != value)
+            {
+                _isPlaying = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(PlayPauseGlyph));
+            }
+        }
+    }
+
+    public string PlayPauseGlyph => IsPlaying ? "" : "";
+
+    public string TransportStatusText => _transportStatusText;
+
+    public Visibility TransportStatusVisibility =>
+        string.IsNullOrEmpty(_transportStatusText) ? Visibility.Collapsed : Visibility.Visible;
+
+    /// <summary>
+    /// Sends pause when playing and resume when paused. On success the playing
+    /// flag flips optimistically; the command also triggers server polls, so
+    /// the authoritative state arrives within a second.
+    /// </summary>
+    public async Task TogglePlayPauseAsync()
+    {
+        if (_lastPlaybackState?.CurrentTrack is null)
+        {
+            return;
+        }
+
+        string command = IsPlaying ? "pause" : "resume";
+        PlayerCommandResult result = await _client.SendPlayerCommandAsync(command);
+        if (result == PlayerCommandResult.Success)
+        {
+            IsPlaying = !IsPlaying;
+        }
+
+        ReportTransportResult(result);
+    }
+
+    public async Task SkipToNextAsync()
+    {
+        if (_lastPlaybackState?.CurrentTrack is null)
+        {
+            return;
+        }
+
+        ReportTransportResult(await _client.SendPlayerCommandAsync("next"));
+    }
+
+    public async Task SkipToPreviousAsync()
+    {
+        if (_lastPlaybackState?.CurrentTrack is null)
+        {
+            return;
+        }
+
+        ReportTransportResult(await _client.SendPlayerCommandAsync("previous"));
+    }
+
+    /// <summary>
+    /// Surfaces why a transport command was rejected. The 403 case matters
+    /// most: accounts linked before the user-modify-playback-state scope was
+    /// added fail silently until they are re-linked, and nothing else tells the
+    /// user that.
+    /// </summary>
+    internal void ReportTransportResult(PlayerCommandResult result)
+    {
+        string message = result switch
+        {
+            PlayerCommandResult.MissingPermissions =>
+                "Spotify rejected the command. Log out and reconnect your account to grant playback control (Premium required).",
+            PlayerCommandResult.NoActiveDevice =>
+                "No active Spotify device. Start playback in any Spotify app first.",
+            PlayerCommandResult.Failed => "Couldn't reach Spotify. Try again.",
+            _ => string.Empty
+        };
+
+        if (_transportStatusText != message)
+        {
+            _transportStatusText = message;
+            OnPropertyChanged(nameof(TransportStatusText));
+            OnPropertyChanged(nameof(TransportStatusVisibility));
+        }
+
+        _transportStatusTimer.Stop();
+        if (message.Length > 0)
+        {
+            _transportStatusTimer.Start();
+        }
+    }
+
+    private void HideTransportStatus()
+    {
+        _transportStatusTimer.Stop();
+        if (_transportStatusText.Length > 0)
+        {
+            _transportStatusText = string.Empty;
+            OnPropertyChanged(nameof(TransportStatusText));
+            OnPropertyChanged(nameof(TransportStatusVisibility));
+        }
     }
 
     public string DeviceName
@@ -498,6 +602,12 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
         };
         _ticker.Tick += OnTick;
         _ticker.Start();
+
+        _transportStatusTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(TRANSPORT_STATUS_DURATION_MS)
+        };
+        _transportStatusTimer.Tick += (s, e) => HideTransportStatus();
     }
 
     public string ClientId => _client.ClientId;

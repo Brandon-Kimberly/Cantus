@@ -10,6 +10,7 @@ public sealed class SpotifyOptions
     [
         "user-read-playback-state",
         "user-read-currently-playing",
+        "user-modify-playback-state",
         "user-read-email",
         "user-read-private"
     ];
