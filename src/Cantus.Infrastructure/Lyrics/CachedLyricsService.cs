@@ -58,12 +58,25 @@ public sealed class CachedLyricsService : ILyricsProvider
             track.Artist,
             track.Title);
 
-        SyncedLyrics? freshLyrics = await _lrclibProvider.GetLyricsAsync(track, cancellationToken);
+        LyricsFetchResult fetchResult = await _lrclibProvider.FetchLyricsAsync(track, cancellationToken);
 
-        if (freshLyrics is not null)
+        if (fetchResult.Lyrics is not null)
         {
-            await _cacheRepository.SaveLyricsAsync(freshLyrics, cancellationToken: cancellationToken);
-            return freshLyrics;
+            await _cacheRepository.SaveLyricsAsync(fetchResult.Lyrics, cancellationToken: cancellationToken);
+            return fetchResult.Lyrics;
+        }
+
+        // A transient LRCLIB failure must not be negative-cached: it would
+        // mark the track "not found" for the full TTL. Leaving the cache
+        // untouched lets the next poll retry as soon as LRCLIB is back.
+        if (!fetchResult.IsDefinitive)
+        {
+            _logger.LogWarning(
+                "LRCLIB unavailable for track {TrackId} ({Artist} - {Title}); skipping negative cache so it can be retried.",
+                track.Id,
+                track.Artist,
+                track.Title);
+            return null;
         }
 
         // 4. Mark not found with TTL
