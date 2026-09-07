@@ -63,12 +63,33 @@ public sealed partial class LyricsStageView : UserControl
             if (e.OldValue is LyricsViewModel oldVm)
             {
                 oldVm.AutoScrollResumed -= view.OnAutoScrollResumed;
+                oldVm.LyricsReloaded -= view.OnLyricsReloaded;
             }
 
             if (e.NewValue is LyricsViewModel newVm)
             {
                 newVm.AutoScrollResumed += view.OnAutoScrollResumed;
+                newVm.LyricsReloaded += view.OnLyricsReloaded;
             }
+        }
+    }
+
+    private void OnLyricsReloaded()
+    {
+        // A new track's lyrics replaced the collection: jump back to the top
+        // instantly (animating from the previous song's offset would sweep
+        // through unrelated lines). The programmatic-scroll guard keeps the
+        // jump from being mistaken for a manual scroll.
+        try
+        {
+            _isProgrammaticScroll = true;
+            _programmaticScrollResetTimer.Stop();
+            _programmaticScrollResetTimer.Start();
+            LyricsScrollViewer.ChangeView(null, 0, null, disableAnimation: true);
+            StaticLyricsScrollViewer.ChangeView(null, 0, null, disableAnimation: true);
+        }
+        catch
+        {
         }
     }
 
