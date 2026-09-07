@@ -158,6 +158,61 @@ public sealed class AuthEndpointsTests : IClassFixture<WebApplicationFactory<Pro
     }
 
     [Fact]
+    public async Task SpotifyCallback_WhenRelinkingMidPlayback_PreservesPlaybackSnapshot()
+    {
+        // Arrange - the user is mid-song: the registry holds playback, lyrics, and an offset
+        HttpClient client = _factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        IPlaybackSessionRegistry registry = _factory.Services.GetRequiredService<IPlaybackSessionRegistry>();
+
+        PlaybackState playbackState = new()
+        {
+            CurrentTrack = new TrackInfo { Id = "track-1", Title = "Song", Artist = "Artist" },
+            Progress = TimeSpan.FromSeconds(42),
+            IsPlaying = true,
+            TimestampUtc = DateTimeOffset.UtcNow
+        };
+        SyncedLyrics lyrics = new()
+        {
+            TrackId = "track-1",
+            Title = "Song",
+            Artist = "Artist",
+            IsSynced = true,
+            Lines = new List<LyricLine> { new(TimeSpan.FromSeconds(1), "La la la") }
+        };
+        registry.UpdateUserState("sess-relink", "Test User", playbackState, lyrics, 250);
+
+        _mockAuthService
+            .Setup(a => a.ExchangeCodeAsync("auth-code", "verifier-1", It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new UserSession
+            {
+                Id = "sess-relink",
+                SpotifyUserId = "sp-relink",
+                DisplayName = "Test User",
+                AccessToken = "token",
+                RefreshToken = "refresh"
+            });
+
+        HttpRequestMessage request = new(HttpMethod.Get, "/api/auth/spotify/callback?code=auth-code&state=state-1");
+        request.Headers.Add("Cookie", "cantus_oauth_state=state-1; cantus_pkce_verifier=verifier-1");
+
+        // Act - the user re-links their Spotify account while the song is playing
+        HttpResponseMessage response = await client.SendAsync(request);
+
+        // Assert - the callback must not wipe the in-memory playback snapshot
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        UserPlaybackSnapshot? snapshot = registry.GetUserState("sess-relink");
+        snapshot.Should().NotBeNull();
+        snapshot!.PlaybackState.Should().NotBeNull("re-linking must not discard the current playback state");
+        snapshot.PlaybackState!.CurrentTrack!.Id.Should().Be("track-1");
+        snapshot.PlaybackState.IsPlaying.Should().BeTrue();
+        snapshot.Lyrics.Should().NotBeNull("re-linking must not discard the current lyrics");
+        snapshot.Lyrics!.Lines.Should().NotBeEmpty();
+        snapshot.TrackOffsetMs.Should().Be(250, "re-linking must not reset the user's saved track offset");
+        snapshot.DisplayName.Should().Be("Test User");
+    }
+
+    [Fact]
     public async Task RevokeSession_WhenSessionExists_ReturnsOk()
     {
         HttpClient client = _factory.CreateClient();
