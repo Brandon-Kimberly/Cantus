@@ -525,5 +525,98 @@ public sealed class LyricsViewModelTests
         // Assert
         vm.AutoScrollToggleVisibility.Should().Be(Visibility.Collapsed);
     }
+
+    [Fact]
+    public void PausedState_AppliesLatencyCompensationExactly()
+    {
+        // Arrange - paused position math has no wall-clock term, so it is exact
+        SignalRPlaybackClient client = new();
+        LyricsViewModel vm = new(client);
+        vm.LatencyCompensationMs = 200;
+
+        // Act
+        client.RaisePlaybackStateReceived(new PlaybackStatePayload
+        {
+            CurrentTrack = new TrackInfoPayload { Id = "t1", Title = "Song", Artist = "Artist", DurationMs = 240000 },
+            ProgressMs = 60000,
+            IsPlaying = false,
+            TimestampUtc = DateTimeOffset.UtcNow
+        });
+
+        // Assert
+        vm.InterpolatedProgressMs.Should().Be(59800);
+    }
+
+    [Fact]
+    public void LatencyCompensation_ZeroRemovesTheShiftEntirely()
+    {
+        // Arrange
+        SignalRPlaybackClient client = new();
+        LyricsViewModel vm = new(client);
+        vm.LatencyCompensationMs = 0;
+
+        // Act
+        client.RaisePlaybackStateReceived(new PlaybackStatePayload
+        {
+            CurrentTrack = new TrackInfoPayload { Id = "t1", Title = "Song", Artist = "Artist", DurationMs = 240000 },
+            ProgressMs = 60000,
+            IsPlaying = false,
+            TimestampUtc = DateTimeOffset.UtcNow
+        });
+
+        // Assert
+        vm.InterpolatedProgressMs.Should().Be(60000);
+    }
+
+    [Fact]
+    public void AdjustLatencyCompensation_ClampsAndUpdatesCalibrationText()
+    {
+        // Arrange
+        SignalRPlaybackClient client = new();
+        LyricsViewModel vm = new(client);
+        vm.LatencyCompensationMs = 200;
+
+        // Act & Assert - steps, clamping at both bounds, and the display text
+        vm.AdjustLatencyCompensation(-50);
+        vm.LatencyCompensationMs.Should().Be(150);
+        vm.CalibrationText.Should().Be("150 ms");
+
+        vm.AdjustLatencyCompensation(-5000);
+        vm.LatencyCompensationMs.Should().Be(0);
+
+        vm.AdjustLatencyCompensation(5000);
+        vm.LatencyCompensationMs.Should().Be(1000);
+        vm.CalibrationText.Should().Be("1000 ms");
+    }
+
+    [Fact]
+    public void PlayingState_CompensationShiftsAnchorByItsValue()
+    {
+        // Arrange - two view models differing only in compensation; comparing
+        // them cancels the wall-clock elapsed term
+        PlaybackStatePayload state = new()
+        {
+            CurrentTrack = new TrackInfoPayload { Id = "t1", Title = "Song", Artist = "Artist", DurationMs = 240000 },
+            ProgressMs = 60000,
+            IsPlaying = true,
+            TimestampUtc = DateTimeOffset.UtcNow
+        };
+
+        SignalRPlaybackClient clientA = new();
+        LyricsViewModel vmA = new(clientA);
+        vmA.LatencyCompensationMs = 0;
+
+        SignalRPlaybackClient clientB = new();
+        LyricsViewModel vmB = new(clientB);
+        vmB.LatencyCompensationMs = 200;
+
+        // Act
+        clientA.RaisePlaybackStateReceived(state);
+        clientB.RaisePlaybackStateReceived(state);
+
+        // Assert
+        long delta = vmA.InterpolatedProgressMs - vmB.InterpolatedProgressMs;
+        delta.Should().BeInRange(150, 250);
+    }
 }
 

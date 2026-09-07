@@ -31,6 +31,24 @@
                 </StackPanel>
             </Border>
 
+            <!-- Device Latency Calibration -->
+            <Border Background="{x:Bind ViewModel.SurfaceCardBrush, Mode=OneWay}"
+                    BorderBrush="{x:Bind ViewModel.CardBorderBrush, Mode=OneWay}"
+                    BorderThickness="1"
+                    CornerRadius="16"
+                    Padding="16,14">
+                <StackPanel Spacing="10">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <TextBlock Grid.Column="0" Text="DEVICE LATENCY" FontSize="11" FontWeight="Bold" Foreground="{x:Bind ViewModel.TextMutedBrush, Mode=OneWay}" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="1" Text="{x:Bind ViewModel.CalibrationText, Mode=OneWay}" FontSize="12" FontWeight="Bold" Foreground="{x:Bind ViewModel.PrimaryAccentBrush, Mode=OneWay}" VerticalAlignment="Center" />
+                    </Grid>
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
+                        <Button Grid.Column="0" Content="-50ms (earlier)" Click="OnLatencyMinusClicked" Background="#20FFFFFF" Foreground="{x:Bind ViewModel.TextPrimaryBrush, Mode=OneWay}" CornerRadius="6" HorizontalAlignment="Stretch" Padding="2,6" FontSize="11" />
+                        <Button Grid.Column="1" Content="+50ms (later)" Click="OnLatencyPlusClicked" Background="#20FFFFFF" Foreground="{x:Bind ViewModel.TextPrimaryBrush, Mode=OneWay}" CornerRadius="6" HorizontalAlignment="Stretch" Padding="2,6" FontSize="11" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+
             <!-- Network Diagnostics Card -->
             <Border Background="{x:Bind ViewModel.SurfaceCardBrush, Mode=OneWay}"
                     BorderBrush="{x:Bind ViewModel.CardBorderBrush, Mode=OneWay}"
