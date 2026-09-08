@@ -65,7 +65,7 @@ public sealed class SignalRPlaybackClientTests
         SignalRPlaybackClient client = new(
             "http://127.0.0.1:59997/hubs/playback",
             null,
-            TimeSpan.FromMilliseconds(100));
+            TimeSpan.FromSeconds(5));
         client.ConnectionStateChanged += state => stateChanges.Add(state);
 
         using CancellationTokenSource cts = new(TimeSpan.FromMilliseconds(500));
