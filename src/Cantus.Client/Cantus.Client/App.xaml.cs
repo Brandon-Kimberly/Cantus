@@ -10,7 +10,11 @@ public partial class App : Application
 {
     public App()
     {
-        InitializeLogging();
+        if (!ClientLoggingManager.IsInitialized)
+        {
+            InitializeLogging();
+        }
+
         this.InitializeComponent();
     }
 

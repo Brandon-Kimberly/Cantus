@@ -1,9 +1,12 @@
 using System;
+using Microsoft.Extensions.Logging;
 
 namespace Cantus.Client.Services;
 
 public static class WasmInterop
 {
+    private static readonly ILogger _logger = ClientLoggingManager.CreateLogger(typeof(WasmInterop).FullName ?? nameof(WasmInterop));
+
     public static string GetCurrentOrigin()
     {
 #if __WASM__
@@ -18,7 +21,7 @@ public static class WasmInterop
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[WasmInterop] GetCurrentOrigin failed: {ex.Message}");
+            _logger.LogError(ex, "GetCurrentOrigin failed");
         }
 #endif
         return string.Empty;
@@ -35,7 +38,7 @@ public static class WasmInterop
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[WasmInterop] NavigateTo failed: {ex.Message}");
+            _logger.LogError(ex, "NavigateTo failed");
         }
 #endif
     }
@@ -54,7 +57,7 @@ public static class WasmInterop
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[WasmInterop] GetAuthQueryParameter failed: {ex.Message}");
+            _logger.LogError(ex, "GetAuthQueryParameter failed");
         }
 #endif
         return string.Empty;
@@ -68,8 +71,9 @@ public static class WasmInterop
             Uno.Foundation.WebAssemblyRuntime.InvokeJS(
                 "window.CantusInterop && window.CantusInterop.cleanAuthQuery && window.CantusInterop.cleanAuthQuery()");
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogWarning(ex, "CleanAuthQuery failed");
         }
 #endif
     }
@@ -83,8 +87,9 @@ public static class WasmInterop
                 "window.CantusInterop && window.CantusInterop.isDocumentVisible ? (window.CantusInterop.isDocumentVisible() ? 'true' : 'false') : 'true'");
             return bool.TryParse(val, out bool isVis) ? isVis : true;
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogWarning(ex, "IsDocumentVisible check failed");
             return true;
         }
 #else
