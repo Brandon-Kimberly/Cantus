@@ -126,8 +126,8 @@ public sealed class LyricsViewModelTests
         // Assert
         line.FontSize.Should().Be(24.0); // Small active font size
 
-        // Act - Switch to FullscreenTv
-        layout.UpdateDimensions(1920, 1080);
+        // Act - Switch to FullscreenTv via the explicit kiosk toggle
+        layout.IsKioskMode = true;
 
         // Assert
         line.FontSize.Should().Be(50.0); // TV active font size
@@ -254,6 +254,75 @@ public sealed class LyricsViewModelTests
         vm.HasLyrics.Should().BeFalse();
         vm.IsStaticLyricsMode.Should().BeFalse();
         vm.LyricLines.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task EmptyStateText_ReflectsWhetherATrackIsPlaying()
+    {
+        // Arrange - fresh session: nothing connected, nothing playing
+        SignalRPlaybackClient client = new("http://127.0.0.1:59999/hubs/playback");
+        LyricsViewModel vm = new(client);
+
+        vm.EmptyStateTitle.Should().Be("Waiting for Lyrics...");
+        vm.EmptyStateSubtitle.Should().Be("Connect Spotify and play music to see lyrics.");
+
+        // Act - a track starts playing but no lyrics arrive for it
+        client.RaisePlaybackStateReceived(new PlaybackStatePayload
+        {
+            CurrentTrack = new TrackInfoPayload { Id = "t-1", Title = "Miss America", Artist = "Artist" },
+            IsPlaying = true,
+            TimestampUtc = DateTimeOffset.UtcNow
+        });
+
+        // Assert - the placeholder must not tell an already-connected,
+        // already-playing user to "connect Spotify and play music"
+        vm.EmptyStateTitle.Should().Be("No Lyrics Found");
+        vm.EmptyStateSubtitle.Should().Be("Lyrics for this track aren't available yet.");
+
+        // Act - logout clears the playback state again
+        await vm.LogoutAsync();
+
+        // Assert
+        vm.EmptyStateTitle.Should().Be("Waiting for Lyrics...");
+        vm.EmptyStateSubtitle.Should().Be("Connect Spotify and play music to see lyrics.");
+    }
+
+    [Fact]
+    public void OnLyricsReceived_RaisesLyricsReloadedAfterStateReset()
+    {
+        // Arrange - simulate mid-song state from a previous track
+        SignalRPlaybackClient client = new();
+        LyricsViewModel vm = new(client);
+        vm.SetUserScrollingPaused(true);
+
+        int reloadedCount = 0;
+        int activeIndexAtReload = int.MinValue;
+        bool pausedAtReload = true;
+        vm.LyricsReloaded += () =>
+        {
+            reloadedCount++;
+            activeIndexAtReload = vm.ActiveLineIndex;
+            pausedAtReload = vm.IsUserScrollingPaused;
+        };
+
+        // Act
+        client.RaiseLyricsReceived(new LyricsPayload
+        {
+            TrackId = "track-next",
+            Title = "Next Song",
+            Artist = "Artist",
+            IsSynced = true,
+            Lines = new List<LyricLinePayload>
+            {
+                new() { TimestampMs = 1000, Text = "First line" }
+            }
+        });
+
+        // Assert - the event fires once, after the reset, so a view scrolling
+        // to the top sees a fresh collection with no active line and no pause
+        reloadedCount.Should().Be(1);
+        activeIndexAtReload.Should().Be(-1);
+        pausedAtReload.Should().BeFalse();
     }
 
     [Fact]

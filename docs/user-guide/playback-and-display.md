@@ -13,8 +13,8 @@ flowchart TD
     Screen["Screen Size & Form Factor"] --> RLM["Responsive Layout Engine"]
     RLM --> Small["Small / Mobile (< 680px)"]
     RLM --> Medium["Medium / Tablet (680-1080px)"]
-    RLM --> Large["Large / Desktop (1080-1920px)"]
-    RLM --> TV["Fullscreen / TV 10-Foot (>= 1920px)"]
+    RLM --> Large["Large / Desktop (>= 1080px)"]
+    RLM --> TV["Fullscreen / TV 10-Foot (Kiosk Toggle)"]
 
     Small --> S_View["Compact Header + Swipeable Lyrics/Track/Sync Tabs + Mini Strip"]
     Medium --> M_View["Streamlined Dual-Column + 230px Album Art + Compact Telemetry"]
@@ -28,8 +28,8 @@ flowchart TD
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Small (Mobile)** | `< 680px` | Minimal + Overflow Flyout | Compact 56px thumbnail strip or dedicated tab | Touch-focused, 24px active line | 3-Tab Bottom Bar (Lyrics / Track / Sync & Info) |
 | **Medium (Tablet)** | `680px - 1079px` | Compact status + quick action icons | Side-by-side 290px rail with 230px artwork | Balanced 32px active line | Direct dual-pane or adaptive portrait flow |
-| **Large (Desktop)** | `1080px - 1919px` | Full telemetry pills + actions | Expansive 380px card with 332px artwork | Grand 38px active line with smooth auto-scroll | Dual-column workspace |
-| **Fullscreen (TV)** | `>= 1920px` / Kiosk | Hidden | Floating minimal 10-foot HUD | Centered 50px high-contrast karaoke lyrics | Keyboard / remote navigation |
+| **Large (Desktop)** | `>= 1080px` | Full telemetry pills + actions | Expansive 380px card with 332px artwork | Grand 38px active line with smooth auto-scroll | Dual-column workspace |
+| **Fullscreen (TV)** | Kiosk toggle (<kbd>K</kbd> / <kbd>F11</kbd>) | Hidden | Floating minimal 10-foot HUD | Centered 50px high-contrast karaoke lyrics | Keyboard / remote navigation |
 
 ---
 
@@ -63,7 +63,8 @@ To use Cantus as an ambient music visualizer on a TV or dedicated Raspberry Pi d
 1. Open your browser on the smart TV (or launch a Chromium kiosk on Raspberry Pi) to your Cantus URL: `http://<your-server-ip>:5000`.
 2. Select your user room from the room selector.
 3. Enter fullscreen mode (press <kbd>F11</kbd> or use the TV browser's fullscreen button).
-4. The cursor will auto-hide after 3 seconds of inactivity to keep the display clean.
+4. Press <kbd>K</kbd> (or <kbd>F11</kbd> in the app) to switch into the 10-foot kiosk lyrics stage. Kiosk mode is an explicit toggle, so large monitors keep the full desktop controls unless you opt in; press <kbd>Esc</kbd> to exit.
+5. The cursor will auto-hide after 3 seconds of inactivity to keep the display clean.
 
 !!! tip "Raspberry Pi & Kiosk Launch"
     If using a Raspberry Pi or wall tablet, launch Chromium in kiosk mode:
