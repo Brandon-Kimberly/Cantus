@@ -93,24 +93,30 @@ public sealed class ClientLoggingManagerTests : IDisposable
     }
 
     [Fact]
-    public void GetLogger_ReturnsValidLoggerEquivalentToCreateLogger()
-    {
-        ILogger loggerByName = ClientLoggingManager.GetLogger("CustomCategory");
-        ILogger<ClientLoggingManagerTests> typedLogger = ClientLoggingManager.GetLogger<ClientLoggingManagerTests>();
-
-        loggerByName.Should().NotBeNull();
-        typedLogger.Should().NotBeNull();
-    }
-
-    [Fact]
-    public void CreateLogger_WhenNotInitialized_LazilyInitializesFactory()
+    public void CreateLogger_WhenNotInitialized_LazilyInitializesFactoryOnFirstLogOperation()
     {
         ClientLoggingManager.IsInitialized.Should().BeFalse();
 
         ILogger logger = ClientLoggingManager.CreateLogger("LazyCategory");
 
         logger.Should().NotBeNull();
+        ClientLoggingManager.IsInitialized.Should().BeFalse();
+
+        _ = logger.IsEnabled(LogLevel.Information);
+
         ClientLoggingManager.IsInitialized.Should().BeTrue();
         ClientLoggingManager.LoggerFactory.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void CreateLogger_PriorToInitializeLogging_ForwardsToUpdatedFactory()
+    {
+        ILogger logger = ClientLoggingManager.CreateLogger("EarlyCategory");
+        _ = logger.IsEnabled(LogLevel.Information);
+
+        ILoggerFactory newFactory = ClientLoggingManager.InitializeLogging(LoggingConfiguration.Trace);
+
+        ClientLoggingManager.LoggerFactory.Should().BeSameAs(newFactory);
+        logger.IsEnabled(LogLevel.Trace).Should().BeTrue();
     }
 }

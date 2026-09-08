@@ -130,9 +130,8 @@ public sealed class AlbumArtColorService
         {
             _logger.LogError(
                 ex,
-                "Failed to extract colors from {AlbumArtUrl}: {Message}",
-                albumArtUrl,
-                ex.Message);
+                "Failed to extract colors from {AlbumArtUrl}",
+                albumArtUrl);
             return null;
         }
     }

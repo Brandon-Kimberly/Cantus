@@ -10,7 +10,7 @@ namespace Cantus.Client.Views;
 
 public sealed partial class MobileSettingsView : UserControl
 {
-    private static readonly ILogger _logger = ClientLoggingManager.CreateLogger(nameof(MobileSettingsView));
+    private static readonly ILogger<MobileSettingsView> _logger = ClientLoggingManager.CreateLogger<MobileSettingsView>();
     public static readonly DependencyProperty ViewModelProperty =
         DependencyProperty.Register(
             nameof(ViewModel),
@@ -79,7 +79,7 @@ public sealed partial class MobileSettingsView : UserControl
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error connecting to Spotify: {Message}", ex.Message);
+            _logger.LogError(ex, "Error connecting to Spotify");
         }
     }
 

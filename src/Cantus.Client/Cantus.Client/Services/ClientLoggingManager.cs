@@ -85,25 +85,106 @@ public static class ClientLoggingManager
 
     public static ILogger CreateLogger(string categoryName)
     {
-        lock (_syncLock)
-        {
-            _loggerFactory ??= CreateLoggerFactory();
-            return _loggerFactory.CreateLogger(categoryName);
-        }
+        return new DelegatingClientLogger(categoryName);
     }
 
     public static ILogger<T> CreateLogger<T>()
     {
-        lock (_syncLock)
+        return new DelegatingClientLogger<T>();
+    }
+
+    private sealed class DelegatingClientLogger : ILogger
+    {
+        private readonly string _categoryName;
+        private ILoggerFactory? _cachedFactory;
+        private ILogger? _cachedLogger;
+
+        public DelegatingClientLogger(string categoryName)
         {
-            _loggerFactory ??= CreateLoggerFactory();
-            return _loggerFactory.CreateLogger<T>();
+            _categoryName = categoryName;
+        }
+
+        private ILogger CurrentLogger
+        {
+            get
+            {
+                ILoggerFactory activeFactory;
+                lock (_syncLock)
+                {
+                    _loggerFactory ??= CreateLoggerFactory();
+                    activeFactory = _loggerFactory;
+                }
+
+                if (_cachedLogger is not null && ReferenceEquals(_cachedFactory, activeFactory))
+                {
+                    return _cachedLogger;
+                }
+
+                lock (this)
+                {
+                    if (_cachedLogger is not null && ReferenceEquals(_cachedFactory, activeFactory))
+                    {
+                        return _cachedLogger;
+                    }
+
+                    ILogger logger = activeFactory.CreateLogger(_categoryName);
+                    _cachedFactory = activeFactory;
+                    _cachedLogger = logger;
+                    return logger;
+                }
+            }
+        }
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            CurrentLogger.Log(logLevel, eventId, state, exception, formatter);
+        }
+
+        public bool IsEnabled(LogLevel logLevel)
+        {
+            return CurrentLogger.IsEnabled(logLevel);
+        }
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull
+        {
+            return CurrentLogger.BeginScope(state);
         }
     }
 
-    public static ILogger GetLogger(string categoryName) => CreateLogger(categoryName);
+    private sealed class DelegatingClientLogger<T> : ILogger<T>
+    {
+        private readonly DelegatingClientLogger _inner;
 
-    public static ILogger<T> GetLogger<T>() => CreateLogger<T>();
+        public DelegatingClientLogger()
+        {
+            _inner = new DelegatingClientLogger(typeof(T).FullName ?? typeof(T).Name);
+        }
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            _inner.Log(logLevel, eventId, state, exception, formatter);
+        }
+
+        public bool IsEnabled(LogLevel logLevel)
+        {
+            return _inner.IsEnabled(logLevel);
+        }
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull
+        {
+            return _inner.BeginScope(state);
+        }
+    }
 
     internal static void ResetForTesting()
     {

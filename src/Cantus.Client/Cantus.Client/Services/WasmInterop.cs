@@ -5,7 +5,7 @@ namespace Cantus.Client.Services;
 
 public static class WasmInterop
 {
-    private static readonly ILogger _logger = ClientLoggingManager.CreateLogger(nameof(WasmInterop));
+    private static readonly ILogger _logger = ClientLoggingManager.CreateLogger(typeof(WasmInterop).FullName ?? nameof(WasmInterop));
 
     public static string GetCurrentOrigin()
     {
@@ -21,7 +21,7 @@ public static class WasmInterop
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "GetCurrentOrigin failed: {Message}", ex.Message);
+            _logger.LogError(ex, "GetCurrentOrigin failed");
         }
 #endif
         return string.Empty;
@@ -38,7 +38,7 @@ public static class WasmInterop
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "NavigateTo failed: {Message}", ex.Message);
+            _logger.LogError(ex, "NavigateTo failed");
         }
 #endif
     }
@@ -57,7 +57,7 @@ public static class WasmInterop
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "GetAuthQueryParameter failed: {Message}", ex.Message);
+            _logger.LogError(ex, "GetAuthQueryParameter failed");
         }
 #endif
         return string.Empty;
@@ -73,7 +73,7 @@ public static class WasmInterop
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "CleanAuthQuery failed: {Message}", ex.Message);
+            _logger.LogWarning(ex, "CleanAuthQuery failed");
         }
 #endif
     }
@@ -89,7 +89,7 @@ public static class WasmInterop
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "IsDocumentVisible check failed: {Message}", ex.Message);
+            _logger.LogWarning(ex, "IsDocumentVisible check failed");
             return true;
         }
 #else

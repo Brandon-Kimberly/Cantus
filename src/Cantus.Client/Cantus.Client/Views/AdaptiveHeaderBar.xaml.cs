@@ -13,7 +13,7 @@ namespace Cantus.Client.Views;
 
 public sealed partial class AdaptiveHeaderBar : UserControl
 {
-    private static readonly ILogger _logger = ClientLoggingManager.CreateLogger(nameof(AdaptiveHeaderBar));
+    private static readonly ILogger<AdaptiveHeaderBar> _logger = ClientLoggingManager.CreateLogger<AdaptiveHeaderBar>();
     public static readonly DependencyProperty ViewModelProperty =
         DependencyProperty.Register(
             nameof(ViewModel),
@@ -78,7 +78,7 @@ public sealed partial class AdaptiveHeaderBar : UserControl
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error connecting to Spotify: {Message}", ex.Message);
+            _logger.LogError(ex, "Error connecting to Spotify");
         }
     }
 
