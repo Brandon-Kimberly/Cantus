@@ -49,6 +49,30 @@ public static class ColorExtractionHelper
     internal const byte PAST_LYRIC_ALPHA = 120;
     internal const byte UPCOMING_LYRIC_ALPHA = 200;
 
+    private const byte TEXT_PRIMARY_R = 248;
+    private const byte TEXT_PRIMARY_G = 250;
+    private const byte TEXT_PRIMARY_B = 252;
+
+    private const byte TEXT_SECONDARY_R = 203;
+    private const byte TEXT_SECONDARY_G = 213;
+    private const byte TEXT_SECONDARY_B = 225;
+
+    private const byte TEXT_MUTED_R = 100;
+    private const byte TEXT_MUTED_G = 116;
+    private const byte TEXT_MUTED_B = 139;
+
+    private const byte ACTIVE_LYRIC_R = 255;
+    private const byte ACTIVE_LYRIC_G = 255;
+    private const byte ACTIVE_LYRIC_B = 255;
+
+    private const byte PAST_LYRIC_R = 100;
+    private const byte PAST_LYRIC_G = 116;
+    private const byte PAST_LYRIC_B = 139;
+
+    private const byte UPCOMING_LYRIC_R = 148;
+    private const byte UPCOMING_LYRIC_G = 163;
+    private const byte UPCOMING_LYRIC_B = 184;
+
     public static ColorPalette GeneratePaletteFromMetadata(string? title, string? artist, string? albumArtUrl)
     {
         string seedString = $"{albumArtUrl ?? ""}|{artist ?? ""}|{title ?? ""}";
@@ -217,13 +241,13 @@ public static class ColorExtractionHelper
             CardBorder: cardBorder,
             PrimaryAccent: primaryAccent,
             SecondaryAccent: secondaryAccent,
-            TextPrimary: Color.FromArgb(OPAQUE_ALPHA, 248, 250, 252),
-            TextSecondary: Color.FromArgb(OPAQUE_ALPHA, 203, 213, 225),
-            TextMuted: Color.FromArgb(OPAQUE_ALPHA, 100, 116, 139),
+            TextPrimary: Color.FromArgb(OPAQUE_ALPHA, TEXT_PRIMARY_R, TEXT_PRIMARY_G, TEXT_PRIMARY_B),
+            TextSecondary: Color.FromArgb(OPAQUE_ALPHA, TEXT_SECONDARY_R, TEXT_SECONDARY_G, TEXT_SECONDARY_B),
+            TextMuted: Color.FromArgb(OPAQUE_ALPHA, TEXT_MUTED_R, TEXT_MUTED_G, TEXT_MUTED_B),
             GlowColor: glowColor,
-            ActiveLyricColor: Color.FromArgb(OPAQUE_ALPHA, 255, 255, 255),
-            PastLyricColor: Color.FromArgb(PAST_LYRIC_ALPHA, 100, 116, 139),
-            UpcomingLyricColor: Color.FromArgb(UPCOMING_LYRIC_ALPHA, 148, 163, 184)
+            ActiveLyricColor: Color.FromArgb(OPAQUE_ALPHA, ACTIVE_LYRIC_R, ACTIVE_LYRIC_G, ACTIVE_LYRIC_B),
+            PastLyricColor: Color.FromArgb(PAST_LYRIC_ALPHA, PAST_LYRIC_R, PAST_LYRIC_G, PAST_LYRIC_B),
+            UpcomingLyricColor: Color.FromArgb(UPCOMING_LYRIC_ALPHA, UPCOMING_LYRIC_R, UPCOMING_LYRIC_G, UPCOMING_LYRIC_B)
         );
     }
 
