@@ -22,6 +22,10 @@ public static class DependencyInjection
             configuration.GetSection(SpotifyOptions.SECTION_NAME));
         services.Configure<LrclibOptions>(
             configuration.GetSection(LrclibOptions.SECTION_NAME));
+        services.Configure<NeteaseOptions>(
+            configuration.GetSection(NeteaseOptions.SECTION_NAME));
+        services.Configure<LyricsCacheOptions>(
+            configuration.GetSection(LyricsCacheOptions.SECTION_NAME));
         services.Configure<PlaybackInterpolatorOptions>(
             configuration.GetSection(PlaybackInterpolatorOptions.SECTION_NAME));
 
@@ -53,6 +57,34 @@ public static class DependencyInjection
             client.BaseAddress = new Uri(options.BaseUrl);
             client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", options.UserAgent);
             client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
+        });
+
+        services.AddHttpClient<NeteaseLyricsProvider>((sp, client) =>
+        {
+            NeteaseOptions options = sp.GetRequiredService<IOptions<NeteaseOptions>>().Value;
+            client.BaseAddress = new Uri(options.BaseUrl);
+            // NetEase's unofficial endpoints expect browser-like headers.
+            client.DefaultRequestHeaders.TryAddWithoutValidation("Referer", options.BaseUrl);
+            client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", options.UserAgent);
+            client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
+        });
+
+        // Ordered lyrics fallback chain: LRCLIB first, then any enabled
+        // fallback providers. CachedLyricsService walks this list in order.
+        services.AddScoped<IReadOnlyList<ILyricsFetchProvider>>(sp =>
+        {
+            List<ILyricsFetchProvider> providers = new()
+            {
+                sp.GetRequiredService<LrclibLyricsProvider>()
+            };
+
+            NeteaseOptions neteaseOptions = sp.GetRequiredService<IOptions<NeteaseOptions>>().Value;
+            if (neteaseOptions.Enabled)
+            {
+                providers.Add(sp.GetRequiredService<NeteaseLyricsProvider>());
+            }
+
+            return providers;
         });
 
         services.AddScoped<CachedLyricsService>();
