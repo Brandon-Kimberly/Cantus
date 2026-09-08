@@ -78,7 +78,7 @@ public class CachedLyricsServiceTests
 
         _mockRepo.IsMarkedNotFoundAsync("t3").Returns(false);
         _mockRepo.GetCachedLyricsAsync("t3").Returns((SyncedLyrics?)null);
-        _lrclibProvider.GetLyricsAsync(track).Returns(fresh);
+        _lrclibProvider.FetchLyricsAsync(track).Returns(LyricsFetchResult.Found(fresh));
 
         SyncedLyrics? result = await _service.GetLyricsAsync(track);
 
@@ -99,7 +99,7 @@ public class CachedLyricsServiceTests
 
         _mockRepo.IsMarkedNotFoundAsync("t4").Returns(false);
         _mockRepo.GetCachedLyricsAsync("t4").Returns((SyncedLyrics?)null);
-        _lrclibProvider.GetLyricsAsync(track).Returns((SyncedLyrics?)null);
+        _lrclibProvider.FetchLyricsAsync(track).Returns(LyricsFetchResult.NotFound());
 
         SyncedLyrics? result = await _service.GetLyricsAsync(track);
 
@@ -111,6 +111,34 @@ public class CachedLyricsServiceTests
             "",
             180000,
             TimeSpan.FromDays(7),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GetLyricsAsync_WhenLrclibUnavailable_DoesNotPoisonNegativeCache()
+    {
+        TrackInfo track = new()
+        {
+            Id = "t5",
+            Title = "Song",
+            Artist = "Artist",
+            Duration = TimeSpan.FromSeconds(200)
+        };
+
+        _mockRepo.IsMarkedNotFoundAsync("t5").Returns(false);
+        _mockRepo.GetCachedLyricsAsync("t5").Returns((SyncedLyrics?)null);
+        _lrclibProvider.FetchLyricsAsync(track).Returns(LyricsFetchResult.Unavailable());
+
+        SyncedLyrics? result = await _service.GetLyricsAsync(track);
+
+        result.Should().BeNull();
+        await _mockRepo.DidNotReceive().MarkNotFoundAsync(
+            Arg.Any<string>(),
+            Arg.Any<string>(),
+            Arg.Any<string>(),
+            Arg.Any<string>(),
+            Arg.Any<int>(),
+            Arg.Any<TimeSpan>(),
             Arg.Any<CancellationToken>());
     }
 
