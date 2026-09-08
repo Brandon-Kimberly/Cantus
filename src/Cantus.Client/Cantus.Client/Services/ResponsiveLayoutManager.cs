@@ -20,7 +20,6 @@ public sealed class ResponsiveLayoutManager : INotifyPropertyChanged
     // Breakpoint thresholds (in logical pixels)
     public const double SMALL_BREAKPOINT_MAX_WIDTH = 680.0;
     public const double MEDIUM_BREAKPOINT_MAX_WIDTH = 1080.0;
-    public const double LARGE_BREAKPOINT_MAX_WIDTH = 1920.0;
 
     private double _windowWidth = 1280.0;
     private double _windowHeight = 800.0;
@@ -269,13 +268,12 @@ public sealed class ResponsiveLayoutManager : INotifyPropertyChanged
         {
             computed = LayoutBreakpoint.Medium;
         }
-        else if (WindowWidth < LARGE_BREAKPOINT_MAX_WIDTH)
-        {
-            computed = LayoutBreakpoint.Large;
-        }
         else
         {
-            computed = LayoutBreakpoint.FullscreenTv;
+            // Large covers every desktop width. FullscreenTv is entered only via
+            // the explicit kiosk toggle (F11 / K), so maximized windows on large
+            // monitors never lose the header and controls unexpectedly.
+            computed = LayoutBreakpoint.Large;
         }
 
         CurrentBreakpoint = computed;
