@@ -40,6 +40,26 @@ public static class WasmInterop
 #endif
     }
 
+    public static string GetAuthQueryParameter()
+    {
+#if __WASM__
+        try
+        {
+            string token = Uno.Foundation.WebAssemblyRuntime.InvokeJS(
+                "window.CantusInterop && window.CantusInterop.getAuthQuery ? window.CantusInterop.getAuthQuery() : (new URLSearchParams(window.location.search).get('auth') || '')");
+            if (!string.IsNullOrWhiteSpace(token) && token != "null" && token != "undefined")
+            {
+                return token.Trim();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[WasmInterop] GetAuthQueryParameter failed: {ex.Message}");
+        }
+#endif
+        return string.Empty;
+    }
+
     public static void CleanAuthQuery()
     {
 #if __WASM__
