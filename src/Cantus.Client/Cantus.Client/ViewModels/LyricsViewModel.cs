@@ -106,6 +106,14 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
         }
     }
 
+    public string AppVersion => BuildInfo.Version;
+
+    public string AppSemVer => BuildInfo.SemVer;
+
+    public string CommitSha => BuildInfo.CommitSha;
+
+    public string AppVersionDisplay => $"Cantus v{BuildInfo.Version}";
+
     public string ConnectionStatus
     {
         get => _connectionStatus;

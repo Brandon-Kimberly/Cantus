@@ -31,6 +31,7 @@ public sealed class HealthEndpointsTests : IClassFixture<WebApplicationFactory<P
         result!.Status.Should().Be("Healthy");
         result.Database.Should().Be("Connected");
         result.Version.Should().NotBeNullOrWhiteSpace();
+        result.CommitSha.Should().NotBeNullOrWhiteSpace();
         result.ActiveSessions.Should().BeGreaterThanOrEqualTo(0);
     }
 }

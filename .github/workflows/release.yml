@@ -3,7 +3,7 @@ name: Release & Publish
 on:
   push:
     tags:
-      - 'v*.*.*'
+      - 'v*'
   workflow_dispatch:
     inputs:
       version:
@@ -27,6 +27,14 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Determine Version
+        id: ver
+        shell: bash
+        run: |
+          RAW_VER="${{ github.event.inputs.version || github.ref_name }}"
+          CLEAN_VER="${RAW_VER#v}"
+          echo "VERSION=${CLEAN_VER:-1.0.0}" >> $GITHUB_OUTPUT
+
       - name: Extract Docker Metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -34,8 +42,9 @@ jobs:
           images: ghcr.io/${{ github.repository }}
           tags: |
             type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/') }}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ !contains(steps.ver.outputs.VERSION, '-') }}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/') && !contains(steps.ver.outputs.VERSION, '-') }}
+            type=raw,value=rc,enable=${{ contains(steps.ver.outputs.VERSION, '-') }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -57,6 +66,9 @@ jobs:
           file: ./Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
+          build-args: |
+            APP_VERSION=${{ steps.ver.outputs.VERSION }}
+            COMMIT_SHA=${{ github.sha }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
@@ -109,6 +121,8 @@ jobs:
           -r ${{ matrix.rid }}
           -c Release
           -p:PublishSingleFile=true
+          -p:Version="${{ steps.ver.outputs.VERSION }}"
+          -p:SourceRevisionId="${{ github.sha }}"
           --self-contained true
           -o ./publish
 
@@ -187,11 +201,21 @@ jobs:
       - name: Install Uno WebAssembly Workload
         run: dotnet workload install wasm-tools
 
+      - name: Determine Version
+        id: ver
+        shell: bash
+        run: |
+          RAW_VER="${{ github.event.inputs.version || github.ref_name }}"
+          CLEAN_VER="${RAW_VER#v}"
+          echo "VERSION=${CLEAN_VER:-1.0.0}" >> $GITHUB_OUTPUT
+
       - name: Publish WASM Client
         run: >
           dotnet publish src/Cantus.Client/Cantus.Client/Cantus.Client.csproj
           -f net10.0-browserwasm
           -c Release
+          -p:Version="${{ steps.ver.outputs.VERSION }}"
+          -p:SourceRevisionId="${{ github.sha }}"
           -o ./wasm_dist
 
       - name: Publish Standalone Server
@@ -200,6 +224,8 @@ jobs:
           -r ${{ matrix.rid }}
           -c Release
           -p:PublishSingleFile=true
+          -p:Version="${{ steps.ver.outputs.VERSION }}"
+          -p:SourceRevisionId="${{ github.sha }}"
           --self-contained true
           -o ./server_dist
 
@@ -269,4 +295,4 @@ jobs:
             ./all_artifacts/*
           generate_release_notes: true
           draft: false
-          prerelease: false
+          prerelease: ${{ contains(steps.release_tag.outputs.TAG, '-') }}
