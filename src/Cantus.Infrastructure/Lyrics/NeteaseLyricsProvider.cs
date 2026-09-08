@@ -16,7 +16,7 @@ namespace Cantus.Infrastructure.Lyrics;
 /// reported as an authoritative miss rather than served as plain text, since
 /// LRCLIB earlier in the chain already covers plain lyrics.
 /// </summary>
-public class NeteaseLyricsProvider : ILyricsFetchProvider
+public partial class NeteaseLyricsProvider : ILyricsFetchProvider
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -24,14 +24,29 @@ public class NeteaseLyricsProvider : ILyricsFetchProvider
         NumberHandling = JsonNumberHandling.AllowReadingFromString
     };
 
+    // NetEase signals API errors, rate limits, and anti-scraping challenges
+    // via the payload's root "code" (e.g. -460 for a captcha challenge) while
+    // still returning HTTP 200, so payload codes must be checked explicitly.
+    private const int NETEASE_SUCCESS_CODE = 200;
+
+    // Substring artist matching below this length produces false positives
+    // ("Steve".Contains("Eve")); shorter names must match a full token.
+    private const int MIN_ARTIST_SUBSTRING_MATCH_LENGTH = 3;
+
+    private const int CREDIT_LINE_REGEX_TIMEOUT_MS = 200;
+
+    private static readonly char[] ArtistDelimiters = [',', '/', '&', ';'];
+
     // NetEase prepends credit lines (lyricist/composer/arranger/etc.) to the
     // LRC body; they are metadata, not lyrics, and would render as the first
-    // "sung" lines. Matches a timestamped line whose text starts with a known
-    // CJK credit label followed by a colon.
-    private const string CREDIT_LINE_PATTERN =
-        @"^\[\d{2,}:\d{2}(?:[.:]\d{1,3})?\]\s*(?:作词|作曲|编曲|制作人|制作|监制|混音|母带|录音|出品|发行|和声|吉他|贝斯|键盘|弦乐|鼓)\s*[:：]";
-
-    private static readonly Regex CreditLineRegex = new(CREDIT_LINE_PATTERN, RegexOptions.Compiled);
+    // "sung" lines. Matches timestamped lines whose text starts with common
+    // CJK credit labels (full or single-character abbreviations, optionally
+    // composite like 词/曲) or English ones, followed by a colon.
+    [GeneratedRegex(
+        @"^\[\d{2,}:\d{2}(?:[.:]\d{1,3})?\]\s*(?:(?:作?词|作?曲|词曲|编曲|制作人?|监制|混音|母带|录音|出品|发行|和声|吉他|贝斯|键盘|弦乐|鼓)(?:\s*[/／]\s*(?:作?词|作?曲))?|(?:Lyrics|Music|Written|Produced)(?:\s+by)?)\s*[:：]",
+        RegexOptions.IgnoreCase,
+        matchTimeoutMilliseconds: CREDIT_LINE_REGEX_TIMEOUT_MS)]
+    private static partial Regex CreditLineRegex();
 
     private readonly HttpClient _httpClient;
     private readonly NeteaseOptions _options;
@@ -62,13 +77,27 @@ public class NeteaseLyricsProvider : ILyricsFetchProvider
 
         try
         {
-            long? songId = await TryFindSongIdAsync(track, cancellationToken);
+            NeteaseSearchResponseDto? search = await SearchAsync(track, cancellationToken);
+            if (search is null || search.Code != NETEASE_SUCCESS_CODE)
+            {
+                LogPayloadError("search", search?.Code, track);
+                return LyricsFetchResult.Unavailable();
+            }
+
+            long? songId = SelectBestMatch(search, track);
             if (songId is null)
             {
                 return LyricsFetchResult.NotFound();
             }
 
-            return await TryGetLyricsAsync(songId.Value, track, cancellationToken);
+            NeteaseLyricResponseDto? lyric = await GetLyricAsync(songId.Value, cancellationToken);
+            if (lyric is null || lyric.Code != NETEASE_SUCCESS_CODE)
+            {
+                LogPayloadError("lyric", lyric?.Code, track);
+                return LyricsFetchResult.Unavailable();
+            }
+
+            return MapLyric(lyric, track, songId.Value);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -93,7 +122,18 @@ public class NeteaseLyricsProvider : ILyricsFetchProvider
         }
     }
 
-    private async Task<long?> TryFindSongIdAsync(TrackInfo track, CancellationToken ct)
+    private void LogPayloadError(string endpoint, int? code, TrackInfo track)
+    {
+        _logger.LogWarning(
+            "NetEase {Endpoint} returned payload code {Code} for track {TrackId} ({Artist} - {Title}); treating as unavailable.",
+            endpoint,
+            code,
+            track.Id,
+            track.Artist,
+            track.Title);
+    }
+
+    private async Task<NeteaseSearchResponseDto?> SearchAsync(TrackInfo track, CancellationToken ct)
     {
         string query = Uri.EscapeDataString($"{track.Title} {track.Artist}");
         string url = $"/api/search/get?s={query}&type=1&limit={_options.SearchLimit}";
@@ -101,10 +141,12 @@ public class NeteaseLyricsProvider : ILyricsFetchProvider
         using HttpResponseMessage response = await _httpClient.GetAsync(url, ct);
         response.EnsureSuccessStatusCode();
 
-        NeteaseSearchResponseDto? search =
-            await response.Content.ReadFromJsonAsync<NeteaseSearchResponseDto>(JsonOptions, cancellationToken: ct);
+        return await response.Content.ReadFromJsonAsync<NeteaseSearchResponseDto>(JsonOptions, cancellationToken: ct);
+    }
 
-        if (search?.Result?.Songs is not { Count: > 0 } songs)
+    private long? SelectBestMatch(NeteaseSearchResponseDto search, TrackInfo track)
+    {
+        if (search.Result?.Songs is not { Count: > 0 } songs)
         {
             return null;
         }
@@ -134,27 +176,55 @@ public class NeteaseLyricsProvider : ILyricsFetchProvider
             return false;
         }
 
+        // Spotify joins artists into one string ("Kendrick Lamar, SZA") while
+        // NetEase returns individual artist objects; tokenize before comparing
+        // so short names cannot substring-match unrelated artists.
+        string[] trackArtists = track.Artist
+            .Split(ArtistDelimiters, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
         return song.Artists.Any(a =>
             !string.IsNullOrWhiteSpace(a.Name) &&
-            (track.Artist.Contains(a.Name, StringComparison.OrdinalIgnoreCase) ||
-             a.Name.Contains(track.Artist, StringComparison.OrdinalIgnoreCase)));
+            trackArtists.Any(ta =>
+                string.Equals(ta, a.Name, StringComparison.OrdinalIgnoreCase) ||
+                (a.Name.Length >= MIN_ARTIST_SUBSTRING_MATCH_LENGTH && ContainsWholeWord(ta, a.Name))));
     }
 
-    private async Task<LyricsFetchResult> TryGetLyricsAsync(long songId, TrackInfo track, CancellationToken ct)
+    /// <summary>
+    /// Containment with word boundaries: "The Chemical Brothers" contains
+    /// "Chemical Brothers", but "Steve" does not contain "Eve" - a plain
+    /// substring check matches mid-word and picks wrong songs.
+    /// </summary>
+    private static bool ContainsWholeWord(string haystack, string needle)
+    {
+        int index = haystack.IndexOf(needle, StringComparison.OrdinalIgnoreCase);
+        while (index >= 0)
+        {
+            bool startsAtBoundary = index == 0 || !char.IsLetterOrDigit(haystack[index - 1]);
+            int end = index + needle.Length;
+            bool endsAtBoundary = end == haystack.Length || !char.IsLetterOrDigit(haystack[end]);
+            if (startsAtBoundary && endsAtBoundary)
+            {
+                return true;
+            }
+
+            index = haystack.IndexOf(needle, index + 1, StringComparison.OrdinalIgnoreCase);
+        }
+
+        return false;
+    }
+
+    private async Task<NeteaseLyricResponseDto?> GetLyricAsync(long songId, CancellationToken ct)
     {
         string url = $"/api/song/lyric?id={songId}&lv=1&kv=1&tv=-1";
 
         using HttpResponseMessage response = await _httpClient.GetAsync(url, ct);
         response.EnsureSuccessStatusCode();
 
-        NeteaseLyricResponseDto? lyric =
-            await response.Content.ReadFromJsonAsync<NeteaseLyricResponseDto>(JsonOptions, cancellationToken: ct);
+        return await response.Content.ReadFromJsonAsync<NeteaseLyricResponseDto>(JsonOptions, cancellationToken: ct);
+    }
 
-        if (lyric is null)
-        {
-            return LyricsFetchResult.NotFound();
-        }
-
+    private LyricsFetchResult MapLyric(NeteaseLyricResponseDto lyric, TrackInfo track, long songId)
+    {
         if (lyric.NoLyric)
         {
             return LyricsFetchResult.Found(new SyncedLyrics
@@ -204,13 +274,16 @@ public class NeteaseLyricsProvider : ILyricsFetchProvider
     {
         IEnumerable<string> kept = lrcText
             .Split('\n')
-            .Where(line => !CreditLineRegex.IsMatch(line.TrimEnd('\r')));
+            .Where(line => !CreditLineRegex().IsMatch(line.TrimEnd('\r')));
 
         return string.Join('\n', kept);
     }
 
     internal sealed class NeteaseSearchResponseDto
     {
+        [JsonPropertyName("code")]
+        public int Code { get; set; } = NETEASE_SUCCESS_CODE;
+
         [JsonPropertyName("result")]
         public NeteaseSearchResultDto? Result { get; set; }
     }
@@ -245,6 +318,9 @@ public class NeteaseLyricsProvider : ILyricsFetchProvider
 
     internal sealed class NeteaseLyricResponseDto
     {
+        [JsonPropertyName("code")]
+        public int Code { get; set; } = NETEASE_SUCCESS_CODE;
+
         [JsonPropertyName("nolyric")]
         public bool NoLyric { get; set; }
 

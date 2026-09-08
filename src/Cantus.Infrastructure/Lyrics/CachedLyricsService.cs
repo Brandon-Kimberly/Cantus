@@ -9,13 +9,13 @@ public sealed class CachedLyricsService : ILyricsProvider
 {
     private readonly ILyricsCacheRepository _cacheRepository;
     private readonly IReadOnlyList<ILyricsFetchProvider> _providers;
-    private readonly LrclibOptions _options;
+    private readonly LyricsCacheOptions _options;
     private readonly ILogger<CachedLyricsService> _logger;
 
     public CachedLyricsService(
         ILyricsCacheRepository cacheRepository,
         IReadOnlyList<ILyricsFetchProvider> providers,
-        IOptions<LrclibOptions> options,
+        IOptions<LyricsCacheOptions> options,
         ILogger<CachedLyricsService> logger)
     {
         _cacheRepository = cacheRepository;

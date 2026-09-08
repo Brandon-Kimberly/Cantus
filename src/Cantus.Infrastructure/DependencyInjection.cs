@@ -24,6 +24,8 @@ public static class DependencyInjection
             configuration.GetSection(LrclibOptions.SECTION_NAME));
         services.Configure<NeteaseOptions>(
             configuration.GetSection(NeteaseOptions.SECTION_NAME));
+        services.Configure<LyricsCacheOptions>(
+            configuration.GetSection(LyricsCacheOptions.SECTION_NAME));
         services.Configure<PlaybackInterpolatorOptions>(
             configuration.GetSection(PlaybackInterpolatorOptions.SECTION_NAME));
 
@@ -63,9 +65,7 @@ public static class DependencyInjection
             client.BaseAddress = new Uri(options.BaseUrl);
             // NetEase's unofficial endpoints expect browser-like headers.
             client.DefaultRequestHeaders.TryAddWithoutValidation("Referer", options.BaseUrl);
-            client.DefaultRequestHeaders.TryAddWithoutValidation(
-                "User-Agent",
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+            client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", options.UserAgent);
             client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
         });
 

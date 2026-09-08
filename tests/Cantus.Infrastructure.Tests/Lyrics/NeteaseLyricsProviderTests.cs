@@ -170,6 +170,156 @@ public class NeteaseLyricsProviderTests
     }
 
     [Fact]
+    public async Task FetchLyricsAsync_SearchPayloadErrorCode_ReportsUnavailable()
+    {
+        // NetEase signals rate limits and anti-scraping challenges with an
+        // HTTP 200 whose payload carries a non-200 "code" (e.g. -460). That
+        // must never read as an authoritative miss, or the track would be
+        // negative-cached for the full TTL.
+        MockHttpMessageHandler handler = new()
+        {
+            ResponseHandler = _ => Json("""{ "code": -460, "message": "Cheating" }""")
+        };
+
+        LyricsFetchResult result = await CreateProvider(handler).FetchLyricsAsync(MatchingTrack);
+
+        result.Lyrics.Should().BeNull();
+        result.IsDefinitive.Should().BeFalse("a payload error code is transient, not an authoritative miss");
+    }
+
+    [Fact]
+    public async Task FetchLyricsAsync_LyricPayloadErrorCode_ReportsUnavailable()
+    {
+        MockHttpMessageHandler handler = new()
+        {
+            ResponseHandler = req =>
+            {
+                if (req.RequestUri!.PathAndQuery.StartsWith("/api/search/get"))
+                {
+                    return Json(SEARCH_JSON);
+                }
+
+                return Json("""{ "code": 500 }""");
+            }
+        };
+
+        LyricsFetchResult result = await CreateProvider(handler).FetchLyricsAsync(MatchingTrack);
+
+        result.Lyrics.Should().BeNull();
+        result.IsDefinitive.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task FetchLyricsAsync_StripsAbbreviatedAndEnglishCreditVariants()
+    {
+        MockHttpMessageHandler handler = new()
+        {
+            ResponseHandler = req =>
+            {
+                if (req.RequestUri!.PathAndQuery.StartsWith("/api/search/get"))
+                {
+                    return Json(SEARCH_JSON);
+                }
+
+                return Json("""
+                    {
+                        "lrc": { "lyric": "[00:00.000] 词: Someone\n[00:01.000] 曲: Someone Else\n[00:01.500] 词/曲: A Third Person\n[00:02.000] Written by: An English Credit\n[00:03.000]Produced by: Another Credit\n[00:08.156]The actual first lyric\n" },
+                        "code": 200
+                    }
+                    """);
+            }
+        };
+
+        LyricsFetchResult result = await CreateProvider(handler).FetchLyricsAsync(MatchingTrack);
+
+        result.Lyrics.Should().NotBeNull();
+        result.Lyrics!.Lines.Should().HaveCount(1, "all five credit-line variants must be stripped");
+        result.Lyrics.Lines[0].Text.Should().Be("The actual first lyric");
+    }
+
+    [Fact]
+    public async Task FetchLyricsAsync_ShortArtistSubstring_DoesNotFalselyMatch()
+    {
+        // "Steve".Contains("Eve") must not match: substring matches require a
+        // minimum artist-name length, otherwise short names pick wrong songs.
+        MockHttpMessageHandler handler = new()
+        {
+            ResponseHandler = req => req.RequestUri!.PathAndQuery.StartsWith("/api/search/get")
+                ? Json("""
+                    {
+                        "result": {
+                            "songs": [
+                                { "id": 333, "name": "Some Song", "duration": 200000,
+                                  "artists": [ { "name": "Eve" } ] }
+                            ],
+                            "songCount": 1
+                        },
+                        "code": 200
+                    }
+                    """)
+                : new HttpResponseMessage(HttpStatusCode.NotFound)
+        };
+
+        TrackInfo track = new()
+        {
+            Id = "t-steve",
+            Title = "Some Song",
+            Artist = "Steve",
+            Duration = TimeSpan.FromMilliseconds(200000)
+        };
+
+        LyricsFetchResult result = await CreateProvider(handler).FetchLyricsAsync(track);
+
+        result.Lyrics.Should().BeNull();
+        result.IsDefinitive.Should().BeTrue("the search answered; no candidate matched");
+    }
+
+    [Fact]
+    public async Task FetchLyricsAsync_JoinedSpotifyArtists_MatchIndividualNeteaseArtist()
+    {
+        // Spotify joins artists ("Kendrick Lamar, SZA"); NetEase lists them
+        // individually. Tokenized comparison must still connect the two.
+        MockHttpMessageHandler handler = new()
+        {
+            ResponseHandler = req =>
+            {
+                if (req.RequestUri!.PathAndQuery.StartsWith("/api/search/get"))
+                {
+                    return Json("""
+                        {
+                            "result": {
+                                "songs": [
+                                    { "id": 444, "name": "All The Stars", "duration": 232000,
+                                      "artists": [ { "name": "SZA" } ] }
+                                ],
+                                "songCount": 1
+                            },
+                            "code": 200
+                        }
+                        """);
+                }
+
+                return Json("""
+                    { "lrc": { "lyric": "[00:05.000]This may be the night\n" }, "code": 200 }
+                    """);
+            }
+        };
+
+        TrackInfo track = new()
+        {
+            Id = "t-allthestars",
+            Title = "All The Stars",
+            Artist = "Kendrick Lamar, SZA",
+            Duration = TimeSpan.FromMilliseconds(232000)
+        };
+
+        LyricsFetchResult result = await CreateProvider(handler).FetchLyricsAsync(track);
+
+        result.Lyrics.Should().NotBeNull();
+        result.Lyrics!.Lines.Should().HaveCount(1);
+    }
+
+    [Fact]
     public async Task FetchLyricsAsync_ServerError_ReportsUnavailable()
     {
         MockHttpMessageHandler handler = new()

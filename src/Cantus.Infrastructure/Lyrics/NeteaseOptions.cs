@@ -11,6 +11,7 @@ public sealed class NeteaseOptions
     public const string SECTION_NAME = "Netease";
     public bool Enabled { get; set; } = true;
     public string BaseUrl { get; set; } = "https://music.163.com";
+    public string UserAgent { get; set; } = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)";
     public int TimeoutSeconds { get; set; } = 10;
     public int SearchLimit { get; set; } = 10;
     public int DurationToleranceSeconds { get; set; } = 5;

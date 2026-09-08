@@ -24,7 +24,7 @@ public class CachedLyricsServiceTests
         _fallbackProvider = Substitute.For<ILyricsFetchProvider>();
         _fallbackProvider.ProviderName.Returns("Fallback");
 
-        IOptions<LrclibOptions> options = Options.Create(new LrclibOptions { NegativeCacheDays = 7 });
+        IOptions<LyricsCacheOptions> options = Options.Create(new LyricsCacheOptions { NegativeCacheDays = 7 });
 
         _service = new CachedLyricsService(
             _mockRepo,

@@ -42,13 +42,27 @@ All settings can be configured via environment variables (using double-underscor
 | **`PlaybackPoller__BackgroundPollIntervalMs`** | `int` | `20000` | Polling cadence (ms) applied when all connected viewer tabs report hidden/minimized. | No |
 | **`PlaybackPoller__DiagnosticsBroadcastIntervalMs`** | `int` | `5000` | Interval (ms) for SignalR telemetry diagnostics broadcast. | No |
 
-### Lyrics Provider (`Lrclib`)
+### Lyrics Provider: LRCLIB (`Lrclib`)
 | Variable | Type | Default | Description | Required |
 | :--- | :---: | :---: | :--- | :---: |
 | **`Lrclib__BaseUrl`** | `string` | `https://lrclib.net` | LRCLIB lyrics service base URL. | No |
-| **`Lrclib__NegativeCacheDays`** | `int` | `30` | Duration in days to cache negative lookups (instrumental tracks / not found). | No |
 | **`Lrclib__TimeoutSeconds`** | `int` | `8` | HTTP request timeout (seconds) for external LRCLIB queries. | No |
 | **`Lrclib__UserAgent`** | `string` | `CantusSyncedLyrics/1.0.0 (https://github.com/cantus)` | HTTP User-Agent header sent to LRCLIB API. | No |
+
+### Lyrics Provider: NetEase Fallback (`Netease`)
+| Variable | Type | Default | Description | Required |
+| :--- | :---: | :---: | :--- | :---: |
+| **`Netease__Enabled`** | `bool` | `true` | Enables the NetEase Cloud Music fallback provider (unofficial API). Set `false` to run LRCLIB-only. | No |
+| **`Netease__BaseUrl`** | `string` | `https://music.163.com` | NetEase web API base URL. | No |
+| **`Netease__UserAgent`** | `string` | `Mozilla/5.0 (Windows NT 10.0; Win64; x64)` | HTTP User-Agent header sent to the NetEase API. | No |
+| **`Netease__TimeoutSeconds`** | `int` | `10` | HTTP request timeout (seconds) for NetEase queries. | No |
+| **`Netease__SearchLimit`** | `int` | `10` | Maximum search candidates fetched per lookup. | No |
+| **`Netease__DurationToleranceSeconds`** | `int` | `5` | Maximum track-duration mismatch (seconds) accepted when matching search results. | No |
+
+### Lyrics Cache (`LyricsCache`)
+| Variable | Type | Default | Description | Required |
+| :--- | :---: | :---: | :--- | :---: |
+| **`LyricsCache__NegativeCacheDays`** | `int` | `30` | Duration in days to cache negative lookups (instrumental tracks / not found across all providers). | No |
 
 ### Playback Interpolator (`PlaybackInterpolator`)
 | Variable | Type | Default | Description | Required |
