@@ -24,9 +24,9 @@ public sealed class ResponsiveLayoutManagerTests
     [InlineData(1440.0, 900.0, LayoutBreakpoint.Large)]
     [InlineData(1600.0, 1050.0, LayoutBreakpoint.Large)]
     [InlineData(1919.0, 1080.0, LayoutBreakpoint.Large)]
-    [InlineData(1920.0, 1080.0, LayoutBreakpoint.FullscreenTv)]
-    [InlineData(2560.0, 1440.0, LayoutBreakpoint.FullscreenTv)]
-    [InlineData(3840.0, 2160.0, LayoutBreakpoint.FullscreenTv)]
+    [InlineData(1920.0, 1080.0, LayoutBreakpoint.Large)]
+    [InlineData(2560.0, 1440.0, LayoutBreakpoint.Large)]
+    [InlineData(3840.0, 2160.0, LayoutBreakpoint.Large)]
     public void UpdateDimensions_ClassifiesBreakpointsAccurately(
         double width,
         double height,
@@ -76,7 +76,7 @@ public sealed class ResponsiveLayoutManagerTests
         // Arrange
         ResponsiveLayoutManager layout = new();
         layout.UpdateDimensions(1920, 1080);
-        layout.CurrentBreakpoint.Should().Be(LayoutBreakpoint.FullscreenTv);
+        layout.CurrentBreakpoint.Should().Be(LayoutBreakpoint.Large);
 
         // Act - Force Small
         layout.BreakpointOverride = LayoutBreakpoint.Small;
@@ -90,7 +90,24 @@ public sealed class ResponsiveLayoutManagerTests
         layout.BreakpointOverride = null;
 
         // Assert
-        layout.CurrentBreakpoint.Should().Be(LayoutBreakpoint.FullscreenTv);
+        layout.CurrentBreakpoint.Should().Be(LayoutBreakpoint.Large);
+    }
+
+    [Fact]
+    public void LargeWindow_DoesNotAutoEnterKioskMode()
+    {
+        // Arrange - fullscreen browser on a 4K monitor
+        ResponsiveLayoutManager layout = new();
+
+        // Act
+        layout.UpdateDimensions(3840, 2160);
+
+        // Assert - full desktop chrome stays available at any width
+        layout.CurrentBreakpoint.Should().Be(LayoutBreakpoint.Large);
+        layout.IsFullscreenTv.Should().BeFalse();
+        layout.ShowTopHeader.Should().BeTrue();
+        layout.HeaderMode.Should().Be(HeaderDisplayMode.Full);
+        layout.ShowSidebar.Should().BeTrue();
     }
 
     [Theory]
@@ -151,8 +168,8 @@ public sealed class ResponsiveLayoutManagerTests
         layout.HeaderMode.Should().Be(HeaderDisplayMode.Full);
         layout.ShowSidebar.Should().BeTrue();
 
-        // 4. FullscreenTv (10-Foot TV)
-        layout.UpdateDimensions(1920, 1080);
+        // 4. FullscreenTv (10-Foot TV, entered via the explicit kiosk toggle)
+        layout.IsKioskMode = true;
         layout.IsFullscreenTv.Should().BeTrue();
         layout.SidePanelWidth.Should().Be(0.0);
         layout.ActiveLyricsFontSize.Should().Be(50.0);

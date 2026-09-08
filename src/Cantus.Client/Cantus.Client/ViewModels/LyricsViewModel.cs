@@ -61,6 +61,8 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
     private const string SETTINGS_KEY_AUTOSCROLL = "cantus_autoscroll";
     private bool _isAutoScrollEnabled = LoadAutoScrollPreference();
     private bool _isUserScrollingPaused;
+    private Microsoft.UI.Xaml.Media.ImageSource? _ambientBackgroundSource;
+    private string? _lastAmbientArtworkUrl;
 
     public ObservableCollection<LyricLineViewModel> LyricLines { get; } = new();
     public ObservableCollection<AuthorizedSessionPayload> Sessions { get; } = new();
@@ -80,6 +82,8 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
     public Microsoft.UI.Xaml.Media.SolidColorBrush GlowBrush => _themeManager.GlowBrush;
     public Windows.UI.Color ActivePrimaryAccentColor => _themeManager.ActivePalette.PrimaryAccent;
     public Windows.UI.Color ActiveBackgroundColor => _themeManager.ActivePalette.Background;
+    public Microsoft.UI.Xaml.Media.ImageSource? AmbientBackgroundSource => _ambientBackgroundSource;
+    public Visibility AmbientBackgroundVisibility => _ambientBackgroundSource is null ? Visibility.Collapsed : Visibility.Visible;
 
     // Flattened Layout Properties for 1-level safe XAML {x:Bind}
     public LayoutBreakpoint CurrentBreakpoint => _layoutManager.CurrentBreakpoint;
@@ -571,7 +575,39 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
 
     private void OnPaletteChanged(ColorPalette palette)
     {
+        UpdateAmbientBackground();
         NotifyThemeProperties();
+    }
+
+    private void UpdateAmbientBackground()
+    {
+        string? artworkUrl = _themeManager.AmbientArtworkUrl;
+        if (artworkUrl == _lastAmbientArtworkUrl)
+        {
+            return;
+        }
+
+        _lastAmbientArtworkUrl = artworkUrl;
+
+        if (artworkUrl is null)
+        {
+            _ambientBackgroundSource = null;
+        }
+        else
+        {
+            try
+            {
+                _ambientBackgroundSource = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(artworkUrl));
+            }
+            catch (Exception)
+            {
+                // Headless test environments cannot create XAML bitmaps.
+                _ambientBackgroundSource = null;
+            }
+        }
+
+        OnPropertyChanged(nameof(AmbientBackgroundSource));
+        OnPropertyChanged(nameof(AmbientBackgroundVisibility));
     }
 
     private void NotifyLayoutProperties()
