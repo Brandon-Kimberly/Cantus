@@ -129,9 +129,9 @@ public sealed class ThemeManagerTests
 
         // Assert
         tm.ActivePalette.Name.Should().Contain("Blinding Lights");
-        tm.ActivePalette.Background.A.Should().Be(255);
-        tm.ActivePalette.PrimaryAccent.A.Should().Be(255);
-        tm.ActivePalette.GlowColor.A.Should().Be(60);
+        tm.ActivePalette.Background.A.Should().Be(ColorExtractionHelper.OPAQUE_ALPHA);
+        tm.ActivePalette.PrimaryAccent.A.Should().Be(ColorExtractionHelper.OPAQUE_ALPHA);
+        tm.ActivePalette.GlowColor.A.Should().Be(ColorExtractionHelper.GLOW_COLOR_ALPHA);
     }
 
     [Fact]
@@ -157,9 +157,9 @@ public sealed class ThemeManagerTests
         backgroundLightness.Should().BeLessThan(0.1f);
 
         // Alpha conventions preserved
-        tm.ActivePalette.SurfaceCard.A.Should().Be(204);
-        tm.ActivePalette.CardBorder.A.Should().Be(40);
-        tm.ActivePalette.GlowColor.A.Should().Be(60);
+        tm.ActivePalette.SurfaceCard.A.Should().Be(ColorExtractionHelper.SURFACE_CARD_ALPHA);
+        tm.ActivePalette.CardBorder.A.Should().Be(ColorExtractionHelper.CARD_BORDER_ALPHA);
+        tm.ActivePalette.GlowColor.A.Should().Be(ColorExtractionHelper.GLOW_COLOR_ALPHA);
 
         // Artwork URL exposed for the ambient backdrop alongside the palette
         tm.AmbientArtworkUrl.Should().Be(ALBUM_ART_URL);

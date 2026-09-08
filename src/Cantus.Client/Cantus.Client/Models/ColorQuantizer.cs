@@ -18,6 +18,19 @@ public static class ColorQuantizer
     private const byte MIN_SAMPLE_ALPHA = 128;
     private const int CHANNEL_SHIFT = 3;
 
+    internal const int BYTES_PER_PIXEL = 4;
+    private const int RED_BYTE_OFFSET = 0;
+    private const int GREEN_BYTE_OFFSET = 1;
+    private const int BLUE_BYTE_OFFSET = 2;
+    private const int ALPHA_BYTE_OFFSET = 3;
+
+    private const int BITS_PER_BIN_CHANNEL = 5;
+    private const int RED_BIN_SHIFT = BITS_PER_BIN_CHANNEL * 2;
+    private const int GREEN_BIN_SHIFT = BITS_PER_BIN_CHANNEL;
+
+    private const float MAX_LIGHTNESS_DIVISOR = 510f;
+    internal const byte OPAQUE_ALPHA = 255;
+
     private sealed class ColorBin
     {
         public byte R5;
@@ -43,7 +56,7 @@ public static class ColorQuantizer
         }
 
         int pixelCount = width * height;
-        if (rgbaPixels.Length < pixelCount * 4)
+        if (rgbaPixels.Length < pixelCount * BYTES_PER_PIXEL)
         {
             return Array.Empty<ColorSwatch>();
         }
@@ -88,11 +101,11 @@ public static class ColorQuantizer
 
         for (int pixelIndex = 0; pixelIndex < pixelCount; pixelIndex += step)
         {
-            int offset = pixelIndex * 4;
-            byte r = rgbaPixels[offset];
-            byte g = rgbaPixels[offset + 1];
-            byte b = rgbaPixels[offset + 2];
-            byte a = rgbaPixels[offset + 3];
+            int offset = pixelIndex * BYTES_PER_PIXEL;
+            byte r = rgbaPixels[offset + RED_BYTE_OFFSET];
+            byte g = rgbaPixels[offset + GREEN_BYTE_OFFSET];
+            byte b = rgbaPixels[offset + BLUE_BYTE_OFFSET];
+            byte a = rgbaPixels[offset + ALPHA_BYTE_OFFSET];
 
             if (a < MIN_SAMPLE_ALPHA)
             {
@@ -101,13 +114,15 @@ public static class ColorQuantizer
 
             int max = Math.Max(r, Math.Max(g, b));
             int min = Math.Min(r, Math.Min(g, b));
-            float lightness = (max + min) / 510f;
+            float lightness = (max + min) / MAX_LIGHTNESS_DIVISOR;
             if (lightness < MIN_SAMPLE_LIGHTNESS || lightness > MAX_SAMPLE_LIGHTNESS)
             {
                 continue;
             }
 
-            int key = ((r >> CHANNEL_SHIFT) << 10) | ((g >> CHANNEL_SHIFT) << 5) | (b >> CHANNEL_SHIFT);
+            int key = ((r >> CHANNEL_SHIFT) << RED_BIN_SHIFT)
+                | ((g >> CHANNEL_SHIFT) << GREEN_BIN_SHIFT)
+                | (b >> CHANNEL_SHIFT);
             if (!histogram.TryGetValue(key, out ColorBin? bin))
             {
                 bin = new ColorBin
@@ -233,7 +248,7 @@ public static class ColorQuantizer
 
         int divisor = Math.Max(1, population);
         Color color = Color.FromArgb(
-            255,
+            OPAQUE_ALPHA,
             (byte)(sumR / divisor),
             (byte)(sumG / divisor),
             (byte)(sumB / divisor));

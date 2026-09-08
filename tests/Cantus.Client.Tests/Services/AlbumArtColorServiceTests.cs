@@ -14,6 +14,7 @@ namespace Cantus.Client.Tests.Services;
 public sealed class AlbumArtColorServiceTests
 {
     private const string TEST_URL = "https://i.scdn.co/image/test-album-art";
+    private const int OVERSIZED_IMAGE_BYTES = 5 * 1024 * 1024; // 5MB
 
     // 8x8 solid red PNG
     private const string RED_PNG_BASE64 =
@@ -199,7 +200,7 @@ public sealed class AlbumArtColorServiceTests
             ResponseHandler = _ =>
             {
                 HttpResponseMessage response = CreateImageResponse(RED_PNG_BASE64);
-                response.Content.Headers.ContentLength = 5 * 1024 * 1024;
+                response.Content.Headers.ContentLength = OVERSIZED_IMAGE_BYTES;
                 return response;
             }
         };

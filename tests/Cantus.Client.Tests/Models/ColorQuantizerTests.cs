@@ -9,12 +9,15 @@ namespace Cantus.Client.Tests.Models;
 
 public sealed class ColorQuantizerTests
 {
-    private static byte[] CreateSolidBuffer(int width, int height, byte r, byte g, byte b, byte a = 255)
+    private const int BYTES_PER_PIXEL = ColorQuantizer.BYTES_PER_PIXEL;
+    private const byte OPAQUE_ALPHA = ColorQuantizer.OPAQUE_ALPHA;
+
+    private static byte[] CreateSolidBuffer(int width, int height, byte r, byte g, byte b, byte a = OPAQUE_ALPHA)
     {
-        byte[] buffer = new byte[width * height * 4];
+        byte[] buffer = new byte[width * height * BYTES_PER_PIXEL];
         for (int pixelIndex = 0; pixelIndex < width * height; pixelIndex++)
         {
-            int offset = pixelIndex * 4;
+            int offset = pixelIndex * BYTES_PER_PIXEL;
             buffer[offset] = r;
             buffer[offset + 1] = g;
             buffer[offset + 2] = b;
@@ -24,9 +27,9 @@ public sealed class ColorQuantizerTests
         return buffer;
     }
 
-    private static void SetPixel(byte[] buffer, int pixelIndex, byte r, byte g, byte b, byte a = 255)
+    private static void SetPixel(byte[] buffer, int pixelIndex, byte r, byte g, byte b, byte a = OPAQUE_ALPHA)
     {
-        int offset = pixelIndex * 4;
+        int offset = pixelIndex * BYTES_PER_PIXEL;
         buffer[offset] = r;
         buffer[offset + 1] = g;
         buffer[offset + 2] = b;
@@ -145,7 +148,7 @@ public sealed class ColorQuantizerTests
     public void Quantize_ManyDistinctColors_ReturnsAtMostEightSwatches()
     {
         // Arrange - 32 distinct hues, one row each
-        byte[] buffer = new byte[32 * 32 * 4];
+        byte[] buffer = new byte[32 * 32 * BYTES_PER_PIXEL];
         for (int y = 0; y < 32; y++)
         {
             Color rowColor = ColorExtractionHelper.HslToRgb(y * (360f / 32f), 0.8f, 0.5f);
@@ -168,11 +171,11 @@ public sealed class ColorQuantizerTests
     {
         // Arrange - 640x640 of seeded pseudo-random colors
         Random random = new(42);
-        byte[] buffer = new byte[640 * 640 * 4];
+        byte[] buffer = new byte[640 * 640 * BYTES_PER_PIXEL];
         random.NextBytes(buffer);
         for (int pixelIndex = 0; pixelIndex < 640 * 640; pixelIndex++)
         {
-            buffer[pixelIndex * 4 + 3] = 255;
+            buffer[pixelIndex * BYTES_PER_PIXEL + 3] = OPAQUE_ALPHA;
         }
 
         // Act
