@@ -19,6 +19,24 @@
             </Border.Background>
         </Border>
 
+        <!-- Ambient Artwork Backdrop: full-resolution album art behind a darkening scrim (Dynamic theme only).
+             ImageBrush centers the UniformToFill crop; an Image element would clip to the top-left. -->
+        <Border Visibility="{x:Bind ViewModel.AmbientBackgroundVisibility, Mode=OneWay}"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Stretch">
+            <Border.Background>
+                <ImageBrush ImageSource="{x:Bind ViewModel.AmbientBackgroundSource, Mode=OneWay}"
+                            Stretch="UniformToFill"
+                            AlignmentX="Center"
+                            AlignmentY="Center" />
+            </Border.Background>
+        </Border>
+        <Border Visibility="{x:Bind ViewModel.AmbientBackgroundVisibility, Mode=OneWay}"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Stretch"
+                Background="#000000"
+                Opacity="0.62" />
+
         <!-- Main Responsive Content Container -->
         <Grid Padding="{x:Bind ViewModel.ContentPadding, Mode=OneWay}">
             
