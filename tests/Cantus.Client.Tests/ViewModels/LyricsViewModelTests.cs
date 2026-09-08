@@ -126,8 +126,8 @@ public sealed class LyricsViewModelTests
         // Assert
         line.FontSize.Should().Be(24.0); // Small active font size
 
-        // Act - Switch to FullscreenTv
-        layout.UpdateDimensions(1920, 1080);
+        // Act - Switch to FullscreenTv via the explicit kiosk toggle
+        layout.IsKioskMode = true;
 
         // Assert
         line.FontSize.Should().Be(50.0); // TV active font size

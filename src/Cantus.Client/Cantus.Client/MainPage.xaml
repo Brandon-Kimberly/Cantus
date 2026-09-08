@@ -100,10 +100,13 @@
             <Grid Visibility="{x:Bind GetKioskViewVisibility(ViewModel.CurrentBreakpoint), Mode=OneWay}"
                   RowDefinitions="*,Auto">
                 
-                <!-- Center-Anchored 10-Foot Lyrics Stage -->
+                <!-- Center-Anchored 10-Foot Lyrics Stage: Stretch + MaxWidth keeps the
+                     stage card a constant, self-centered width instead of resizing to
+                     the widest currently-rendered lyric line -->
                 <views:LyricsStageView x:Name="KioskLyricsStage"
                                       Grid.Row="0"
-                                      HorizontalAlignment="Center"
+                                      HorizontalAlignment="Stretch"
+                                      MaxWidth="1200"
                                       ViewModel="{x:Bind ViewModel, Mode=OneWay}" />
 
                 <!-- Bottom Floating Minimal Telemetry HUD -->
