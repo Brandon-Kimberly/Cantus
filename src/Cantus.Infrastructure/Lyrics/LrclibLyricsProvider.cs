@@ -10,8 +10,10 @@ using Microsoft.Extensions.Options;
 
 namespace Cantus.Infrastructure.Lyrics;
 
-public class LrclibLyricsProvider : ILyricsProvider
+public class LrclibLyricsProvider : ILyricsProvider, ILyricsFetchProvider
 {
+    public string ProviderName => "LRCLIB";
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
