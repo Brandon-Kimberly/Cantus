@@ -1,4 +1,3 @@
-using System.Net;
 using Cantus.Core.Interfaces;
 using Cantus.Core.Models;
 using Cantus.Infrastructure.Lyrics;
@@ -13,32 +12,29 @@ namespace Cantus.Infrastructure.Tests.Lyrics;
 public class CachedLyricsServiceTests
 {
     private readonly ILyricsCacheRepository _mockRepo;
-    private readonly LrclibLyricsProvider _lrclibProvider;
+    private readonly ILyricsFetchProvider _primaryProvider;
+    private readonly ILyricsFetchProvider _fallbackProvider;
     private readonly CachedLyricsService _service;
 
     public CachedLyricsServiceTests()
     {
         _mockRepo = Substitute.For<ILyricsCacheRepository>();
+        _primaryProvider = Substitute.For<ILyricsFetchProvider>();
+        _primaryProvider.ProviderName.Returns("Primary");
+        _fallbackProvider = Substitute.For<ILyricsFetchProvider>();
+        _fallbackProvider.ProviderName.Returns("Fallback");
 
-        HttpClient httpClient = new(new DummyHttpMessageHandler())
-        {
-            BaseAddress = new Uri("https://lrclib.net")
-        };
         IOptions<LrclibOptions> options = Options.Create(new LrclibOptions { NegativeCacheDays = 7 });
-        _lrclibProvider = Substitute.ForPartsOf<LrclibLyricsProvider>(
-            httpClient,
-            options,
-            NullLogger<LrclibLyricsProvider>.Instance);
 
         _service = new CachedLyricsService(
             _mockRepo,
-            _lrclibProvider,
+            new[] { _primaryProvider, _fallbackProvider },
             options,
             NullLogger<CachedLyricsService>.Instance);
     }
 
     [Fact]
-    public async Task GetLyricsAsync_WhenNegativeCached_ReturnsNullWithoutCallingProvider()
+    public async Task GetLyricsAsync_WhenNegativeCached_ReturnsNullWithoutCallingProviders()
     {
         TrackInfo track = new() { Id = "t1", Title = "Song", Artist = "Artist" };
         _mockRepo.IsMarkedNotFoundAsync("t1").Returns(true);
@@ -47,10 +43,11 @@ public class CachedLyricsServiceTests
 
         result.Should().BeNull();
         await _mockRepo.DidNotReceive().GetCachedLyricsAsync(Arg.Any<string>());
+        await _primaryProvider.DidNotReceive().FetchLyricsAsync(Arg.Any<TrackInfo>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task GetLyricsAsync_WhenCached_ReturnsCachedWithoutCallingProvider()
+    public async Task GetLyricsAsync_WhenCached_ReturnsCachedWithoutCallingProviders()
     {
         TrackInfo track = new() { Id = "t2", Title = "Song", Artist = "Artist" };
         SyncedLyrics cached = new() { TrackId = "t2", Title = "Song", Artist = "Artist", Lines = [] };
@@ -61,11 +58,12 @@ public class CachedLyricsServiceTests
         SyncedLyrics? result = await _service.GetLyricsAsync(track);
 
         result.Should().BeSameAs(cached);
+        await _primaryProvider.DidNotReceive().FetchLyricsAsync(Arg.Any<TrackInfo>(), Arg.Any<CancellationToken>());
         await _mockRepo.DidNotReceive().SaveLyricsAsync(Arg.Any<SyncedLyrics>(), Arg.Any<TimeSpan?>());
     }
 
     [Fact]
-    public async Task GetLyricsAsync_WhenCacheMiss_AndFoundOnLrclib_SavesToCacheAndReturns()
+    public async Task GetLyricsAsync_WhenPrimaryFinds_SavesAndSkipsFallback()
     {
         TrackInfo track = new() { Id = "t3", Title = "Song", Artist = "Artist" };
         SyncedLyrics fresh = new()
@@ -78,34 +76,67 @@ public class CachedLyricsServiceTests
 
         _mockRepo.IsMarkedNotFoundAsync("t3").Returns(false);
         _mockRepo.GetCachedLyricsAsync("t3").Returns((SyncedLyrics?)null);
-        _lrclibProvider.FetchLyricsAsync(track).Returns(LyricsFetchResult.Found(fresh));
+        _primaryProvider.FetchLyricsAsync(track).Returns(LyricsFetchResult.Found(fresh));
 
         SyncedLyrics? result = await _service.GetLyricsAsync(track);
 
         result.Should().BeSameAs(fresh);
         await _mockRepo.Received(1).SaveLyricsAsync(fresh, cancellationToken: Arg.Any<CancellationToken>());
+        await _fallbackProvider.DidNotReceive().FetchLyricsAsync(Arg.Any<TrackInfo>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task GetLyricsAsync_WhenCacheMiss_AndNotFoundOnLrclib_MarksNotFoundInCache()
+    public async Task GetLyricsAsync_WhenPrimaryMisses_FallsBackAndSavesFallbackResult()
+    {
+        TrackInfo track = new() { Id = "t4", Title = "Song", Artist = "Artist" };
+        SyncedLyrics fromFallback = new()
+        {
+            TrackId = "t4",
+            Title = "Song",
+            Artist = "Artist",
+            Lines = [new(TimeSpan.Zero, "Hi from fallback")]
+        };
+
+        _mockRepo.IsMarkedNotFoundAsync("t4").Returns(false);
+        _mockRepo.GetCachedLyricsAsync("t4").Returns((SyncedLyrics?)null);
+        _primaryProvider.FetchLyricsAsync(track).Returns(LyricsFetchResult.NotFound());
+        _fallbackProvider.FetchLyricsAsync(track).Returns(LyricsFetchResult.Found(fromFallback));
+
+        SyncedLyrics? result = await _service.GetLyricsAsync(track);
+
+        result.Should().BeSameAs(fromFallback);
+        await _mockRepo.Received(1).SaveLyricsAsync(fromFallback, cancellationToken: Arg.Any<CancellationToken>());
+        await _mockRepo.DidNotReceive().MarkNotFoundAsync(
+            Arg.Any<string>(),
+            Arg.Any<string>(),
+            Arg.Any<string>(),
+            Arg.Any<string>(),
+            Arg.Any<int>(),
+            Arg.Any<TimeSpan>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GetLyricsAsync_WhenAllProvidersDefinitivelyMiss_MarksNotFoundInCache()
     {
         TrackInfo track = new()
         {
-            Id = "t4",
+            Id = "t5",
             Title = "Missing",
             Artist = "Artist",
             Duration = TimeSpan.FromSeconds(180)
         };
 
-        _mockRepo.IsMarkedNotFoundAsync("t4").Returns(false);
-        _mockRepo.GetCachedLyricsAsync("t4").Returns((SyncedLyrics?)null);
-        _lrclibProvider.FetchLyricsAsync(track).Returns(LyricsFetchResult.NotFound());
+        _mockRepo.IsMarkedNotFoundAsync("t5").Returns(false);
+        _mockRepo.GetCachedLyricsAsync("t5").Returns((SyncedLyrics?)null);
+        _primaryProvider.FetchLyricsAsync(track).Returns(LyricsFetchResult.NotFound());
+        _fallbackProvider.FetchLyricsAsync(track).Returns(LyricsFetchResult.NotFound());
 
         SyncedLyrics? result = await _service.GetLyricsAsync(track);
 
         result.Should().BeNull();
         await _mockRepo.Received(1).MarkNotFoundAsync(
-            "t4",
+            "t5",
             "Missing",
             "Artist",
             "",
@@ -115,19 +146,20 @@ public class CachedLyricsServiceTests
     }
 
     [Fact]
-    public async Task GetLyricsAsync_WhenLrclibUnavailable_DoesNotPoisonNegativeCache()
+    public async Task GetLyricsAsync_WhenAnyProviderUnavailable_DoesNotPoisonNegativeCache()
     {
         TrackInfo track = new()
         {
-            Id = "t5",
+            Id = "t6",
             Title = "Song",
             Artist = "Artist",
             Duration = TimeSpan.FromSeconds(200)
         };
 
-        _mockRepo.IsMarkedNotFoundAsync("t5").Returns(false);
-        _mockRepo.GetCachedLyricsAsync("t5").Returns((SyncedLyrics?)null);
-        _lrclibProvider.FetchLyricsAsync(track).Returns(LyricsFetchResult.Unavailable());
+        _mockRepo.IsMarkedNotFoundAsync("t6").Returns(false);
+        _mockRepo.GetCachedLyricsAsync("t6").Returns((SyncedLyrics?)null);
+        _primaryProvider.FetchLyricsAsync(track).Returns(LyricsFetchResult.Unavailable());
+        _fallbackProvider.FetchLyricsAsync(track).Returns(LyricsFetchResult.NotFound());
 
         SyncedLyrics? result = await _service.GetLyricsAsync(track);
 
@@ -142,11 +174,26 @@ public class CachedLyricsServiceTests
             Arg.Any<CancellationToken>());
     }
 
-    private sealed class DummyHttpMessageHandler : HttpMessageHandler
+    [Fact]
+    public async Task GetLyricsAsync_WhenAProviderThrows_ChainContinuesAndSkipsNegativeCache()
     {
-        protected override Task<HttpResponseMessage> SendAsync(
-            HttpRequestMessage request,
-            CancellationToken cancellationToken)
-            => Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+        TrackInfo track = new() { Id = "t7", Title = "Song", Artist = "Artist" };
+        SyncedLyrics fromFallback = new()
+        {
+            TrackId = "t7",
+            Title = "Song",
+            Artist = "Artist",
+            Lines = [new(TimeSpan.Zero, "Recovered")]
+        };
+
+        _mockRepo.IsMarkedNotFoundAsync("t7").Returns(false);
+        _mockRepo.GetCachedLyricsAsync("t7").Returns((SyncedLyrics?)null);
+        _primaryProvider.FetchLyricsAsync(track)
+            .Returns<Task<LyricsFetchResult>>(_ => throw new HttpRequestException("boom"));
+        _fallbackProvider.FetchLyricsAsync(track).Returns(LyricsFetchResult.Found(fromFallback));
+
+        SyncedLyrics? result = await _service.GetLyricsAsync(track);
+
+        result.Should().BeSameAs(fromFallback);
     }
 }
