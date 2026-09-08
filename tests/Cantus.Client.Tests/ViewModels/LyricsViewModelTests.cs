@@ -257,6 +257,37 @@ public sealed class LyricsViewModelTests
     }
 
     [Fact]
+    public async Task EmptyStateText_ReflectsWhetherATrackIsPlaying()
+    {
+        // Arrange - fresh session: nothing connected, nothing playing
+        SignalRPlaybackClient client = new("http://127.0.0.1:59999/hubs/playback");
+        LyricsViewModel vm = new(client);
+
+        vm.EmptyStateTitle.Should().Be("Waiting for Lyrics...");
+        vm.EmptyStateSubtitle.Should().Be("Connect Spotify and play music to see lyrics.");
+
+        // Act - a track starts playing but no lyrics arrive for it
+        client.RaisePlaybackStateReceived(new PlaybackStatePayload
+        {
+            CurrentTrack = new TrackInfoPayload { Id = "t-1", Title = "Miss America", Artist = "Artist" },
+            IsPlaying = true,
+            TimestampUtc = DateTimeOffset.UtcNow
+        });
+
+        // Assert - the placeholder must not tell an already-connected,
+        // already-playing user to "connect Spotify and play music"
+        vm.EmptyStateTitle.Should().Be("No Lyrics Found");
+        vm.EmptyStateSubtitle.Should().Be("Lyrics for this track aren't available yet.");
+
+        // Act - logout clears the playback state again
+        await vm.LogoutAsync();
+
+        // Assert
+        vm.EmptyStateTitle.Should().Be("Waiting for Lyrics...");
+        vm.EmptyStateSubtitle.Should().Be("Connect Spotify and play music to see lyrics.");
+    }
+
+    [Fact]
     public void OnLyricsReceived_RaisesLyricsReloadedAfterStateReset()
     {
         // Arrange - simulate mid-song state from a previous track

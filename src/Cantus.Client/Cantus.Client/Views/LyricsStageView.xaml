@@ -62,12 +62,12 @@
                               FontSize="{x:Bind GetEmptyIconSize(ViewModel.CurrentBreakpoint), Mode=OneWay}"
                               Foreground="{x:Bind ViewModel.TextMutedBrush, Mode=OneWay}"
                               HorizontalAlignment="Center" />
-                    <TextBlock Text="Waiting for Lyrics..."
+                    <TextBlock Text="{x:Bind ViewModel.EmptyStateTitle, Mode=OneWay}"
                                FontSize="{x:Bind GetEmptyTitleSize(ViewModel.CurrentBreakpoint), Mode=OneWay}"
                                FontWeight="Bold"
                                Foreground="{x:Bind ViewModel.TextSecondaryBrush, Mode=OneWay}"
                                HorizontalAlignment="Center" />
-                    <TextBlock Text="Connect Spotify and play music to see lyrics."
+                    <TextBlock Text="{x:Bind ViewModel.EmptyStateSubtitle, Mode=OneWay}"
                                FontSize="{x:Bind GetEmptySubtitleSize(ViewModel.CurrentBreakpoint), Mode=OneWay}"
                                Foreground="{x:Bind ViewModel.TextMutedBrush, Mode=OneWay}"
                                HorizontalAlignment="Center"

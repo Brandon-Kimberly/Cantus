@@ -265,6 +265,23 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
     public bool HasSyncedLyrics => _lastLyrics?.Lines is not null && _lastLyrics.Lines.Count > 0;
     public bool HasPlainLyrics => !string.IsNullOrWhiteSpace(_lastLyrics?.PlainLyrics);
 
+    // The empty lyrics stage previously always said "Connect Spotify and play
+    // music" - misleading when a track is already playing and lyrics simply
+    // don't exist for it.
+    public string EmptyStateTitle =>
+        _lastPlaybackState?.CurrentTrack is not null ? "No Lyrics Found" : "Waiting for Lyrics...";
+
+    public string EmptyStateSubtitle =>
+        _lastPlaybackState?.CurrentTrack is not null
+            ? "Lyrics for this track aren't available yet."
+            : "Connect Spotify and play music to see lyrics.";
+
+    private void NotifyEmptyStateText()
+    {
+        OnPropertyChanged(nameof(EmptyStateTitle));
+        OnPropertyChanged(nameof(EmptyStateSubtitle));
+    }
+
     public bool IsInstrumental
     {
         get => _isInstrumental;
@@ -667,6 +684,7 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
             DeviceName = "No Device";
             VolumePercent = null;
             _themeManager.UpdateTrackMetadata(null, null, null);
+            NotifyEmptyStateText();
             return;
         }
 
@@ -678,6 +696,7 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
         IsPlaying = state.IsPlaying;
         DeviceName = state.DeviceName ?? "Spotify";
         VolumePercent = state.VolumePercent;
+        NotifyEmptyStateText();
         if (!string.IsNullOrEmpty(state.ActiveUserDisplayName))
         {
             ActiveUserName = state.ActiveUserDisplayName;
@@ -1088,12 +1107,14 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
         CurrentAlbum = string.Empty;
         AlbumArtUrl = null;
         IsPlaying = false;
+        _lastPlaybackState = null;
         _lastLyrics = null;
         LyricLines.Clear();
         HasLyrics = false;
         IsStaticLyricsMode = false;
         ActiveLineIndex = -1;
         _themeManager.UpdateTrackMetadata(null, null, null);
+        NotifyEmptyStateText();
         OnPropertyChanged(nameof(CurrentUserSession));
         OnPropertyChanged(nameof(IsAuthorized));
         OnPropertyChanged(nameof(ConnectButtonText));
