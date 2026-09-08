@@ -151,10 +151,18 @@ public static class AuthEndpoints
                 verifier,
                 effectiveRedirectUri,
                 cancellationToken);
-            registry.UpdateUserState(session.Id, session.DisplayName, null, null, 0);
+            // Preserve any in-flight snapshot: re-linking mid-song must not wipe the
+            // current playback state, lyrics, or saved track offset, because the
+            // poller only rebroadcasts lyrics on a track change.
+            UserPlaybackSnapshot? existingSnapshot = registry.GetUserState(session.Id);
+            registry.UpdateUserState(
+                session.Id,
+                session.DisplayName,
+                existingSnapshot?.PlaybackState,
+                existingSnapshot?.Lyrics,
+                existingSnapshot?.TrackOffsetMs ?? 0);
 
-            UserPlaybackSnapshot? userSnap = registry.GetUserState(session.Id);
-            bool isPlaying = userSnap?.PlaybackState?.IsPlaying ?? false;
+            bool isPlaying = existingSnapshot?.PlaybackState?.IsPlaying ?? false;
             AuthorizedSessionDto dto = session.ToDto(isPlaying);
 
             if (!string.IsNullOrWhiteSpace(clientId))
