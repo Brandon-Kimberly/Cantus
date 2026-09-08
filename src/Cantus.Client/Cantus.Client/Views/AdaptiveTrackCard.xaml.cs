@@ -2,6 +2,7 @@ using System;
 using Cantus.Client.Models;
 using Cantus.Client.Services;
 using Cantus.Client.ViewModels;
+using Microsoft.Extensions.Logging;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 
@@ -9,6 +10,7 @@ namespace Cantus.Client.Views;
 
 public sealed partial class AdaptiveTrackCard : UserControl
 {
+    private static readonly ILogger _logger = ClientLoggingManager.CreateLogger(nameof(AdaptiveTrackCard));
     public static readonly DependencyProperty ViewModelProperty =
         DependencyProperty.Register(
             nameof(ViewModel),
@@ -72,7 +74,7 @@ public sealed partial class AdaptiveTrackCard : UserControl
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[AdaptiveTrackCard] Error connecting to Spotify: {ex}");
+            _logger.LogError(ex, "Error connecting to Spotify: {Message}", ex.Message);
         }
     }
 

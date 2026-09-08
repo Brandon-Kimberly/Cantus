@@ -2,6 +2,7 @@ using System;
 using Cantus.Client.Models;
 using Cantus.Client.Services;
 using Cantus.Client.ViewModels;
+using Microsoft.Extensions.Logging;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
@@ -12,6 +13,7 @@ namespace Cantus.Client.Views;
 
 public sealed partial class AdaptiveHeaderBar : UserControl
 {
+    private static readonly ILogger _logger = ClientLoggingManager.CreateLogger(nameof(AdaptiveHeaderBar));
     public static readonly DependencyProperty ViewModelProperty =
         DependencyProperty.Register(
             nameof(ViewModel),
@@ -76,7 +78,7 @@ public sealed partial class AdaptiveHeaderBar : UserControl
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[AdaptiveHeaderBar] Error connecting to Spotify: {ex}");
+            _logger.LogError(ex, "Error connecting to Spotify: {Message}", ex.Message);
         }
     }
 

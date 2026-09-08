@@ -9,10 +9,13 @@ public static class ClientLoggingManager
     private static readonly object _syncLock = new();
     private static LoggingConfiguration _currentConfiguration = LoggingConfiguration.None;
     private static bool _isInitialized;
+    private static ILoggerFactory? _loggerFactory;
 
     public static LoggingConfiguration CurrentConfiguration => _currentConfiguration;
 
     public static bool IsInitialized => _isInitialized;
+
+    public static ILoggerFactory? LoggerFactory => _loggerFactory;
 
 #if DEBUG
     public const LoggingConfiguration DEFAULT_CONFIGURATION = LoggingConfiguration.Debug;
@@ -48,7 +51,7 @@ public static class ClientLoggingManager
         {
             _currentConfiguration = configuration;
 
-            ILoggerFactory factory = LoggerFactory.Create(builder =>
+            ILoggerFactory factory = Microsoft.Extensions.Logging.LoggerFactory.Create(builder =>
             {
 #if __WASM__
                 builder.AddProvider(new global::Uno.Extensions.Logging.WebAssembly.WebAssemblyConsoleLoggerProvider());
@@ -69,6 +72,7 @@ public static class ClientLoggingManager
                 builder.AddFilter("Microsoft", LogLevel.Warning);
             });
 
+            _loggerFactory = factory;
             _isInitialized = true;
             return factory;
         }
@@ -77,5 +81,37 @@ public static class ClientLoggingManager
     public static ILoggerFactory InitializeLogging(LoggingConfiguration configuration = DEFAULT_CONFIGURATION)
     {
         return CreateLoggerFactory(configuration);
+    }
+
+    public static ILogger CreateLogger(string categoryName)
+    {
+        lock (_syncLock)
+        {
+            _loggerFactory ??= CreateLoggerFactory();
+            return _loggerFactory.CreateLogger(categoryName);
+        }
+    }
+
+    public static ILogger<T> CreateLogger<T>()
+    {
+        lock (_syncLock)
+        {
+            _loggerFactory ??= CreateLoggerFactory();
+            return _loggerFactory.CreateLogger<T>();
+        }
+    }
+
+    public static ILogger GetLogger(string categoryName) => CreateLogger(categoryName);
+
+    public static ILogger<T> GetLogger<T>() => CreateLogger<T>();
+
+    internal static void ResetForTesting()
+    {
+        lock (_syncLock)
+        {
+            _loggerFactory = null;
+            _isInitialized = false;
+            _currentConfiguration = LoggingConfiguration.None;
+        }
     }
 }
