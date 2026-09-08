@@ -76,7 +76,8 @@
                 </StackPanel>
 
                 <!-- Static Plain Lyrics View -->
-                <ScrollViewer Visibility="{x:Bind ViewModel.StaticLyricsVisibility, Mode=OneWay}"
+                <ScrollViewer x:Name="StaticLyricsScrollViewer"
+                              Visibility="{x:Bind ViewModel.StaticLyricsVisibility, Mode=OneWay}"
                               HorizontalAlignment="{x:Bind GetListHorizontalAlignment(ViewModel.CurrentBreakpoint), Mode=OneWay}"
                               MaxWidth="{x:Bind ViewModel.LyricsMaxWidth, Mode=OneWay}"
                               Padding="16,8">

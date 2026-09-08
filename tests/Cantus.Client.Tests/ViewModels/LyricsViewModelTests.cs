@@ -257,6 +257,44 @@ public sealed class LyricsViewModelTests
     }
 
     [Fact]
+    public void OnLyricsReceived_RaisesLyricsReloadedAfterStateReset()
+    {
+        // Arrange - simulate mid-song state from a previous track
+        SignalRPlaybackClient client = new();
+        LyricsViewModel vm = new(client);
+        vm.SetUserScrollingPaused(true);
+
+        int reloadedCount = 0;
+        int activeIndexAtReload = int.MinValue;
+        bool pausedAtReload = true;
+        vm.LyricsReloaded += () =>
+        {
+            reloadedCount++;
+            activeIndexAtReload = vm.ActiveLineIndex;
+            pausedAtReload = vm.IsUserScrollingPaused;
+        };
+
+        // Act
+        client.RaiseLyricsReceived(new LyricsPayload
+        {
+            TrackId = "track-next",
+            Title = "Next Song",
+            Artist = "Artist",
+            IsSynced = true,
+            Lines = new List<LyricLinePayload>
+            {
+                new() { TimestampMs = 1000, Text = "First line" }
+            }
+        });
+
+        // Assert - the event fires once, after the reset, so a view scrolling
+        // to the top sees a fresh collection with no active line and no pause
+        reloadedCount.Should().Be(1);
+        activeIndexAtReload.Should().Be(-1);
+        pausedAtReload.Should().BeFalse();
+    }
+
+    [Fact]
     public void ServerBaseUrl_DerivesBaseUrlFromClient()
     {
         // Arrange

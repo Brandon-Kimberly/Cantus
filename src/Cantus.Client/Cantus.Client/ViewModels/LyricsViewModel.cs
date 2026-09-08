@@ -439,6 +439,9 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
 
     public event Action<int>? ActiveLineChanged;
 
+    /// <summary>Raised after a new lyrics payload replaces the line collection, so views can reset their scroll position.</summary>
+    public event Action? LyricsReloaded;
+
     public LyricsViewModel(
         SignalRPlaybackClient client,
         ThemeManager? themeManager = null,
@@ -763,6 +766,11 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(ResumeAutoScrollVisibility));
         OnPropertyChanged(nameof(HasSyncedLyrics));
         OnPropertyChanged(nameof(HasPlainLyrics));
+
+        // ActiveLineIndex resets to -1 here, and nothing scrolls on a negative
+        // index - so without this event the stage keeps the previous track's
+        // scroll offset (often the bottom) until the first line activates.
+        LyricsReloaded?.Invoke();
     }
 
     private void OnTrackOffsetReceived(TrackOffsetPayload? offset)
