@@ -235,7 +235,7 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
         }
     }
 
-    public string PlayPauseGlyph => IsPlaying ? "" : "";
+    public string PlayPauseGlyph => IsPlaying ? "\u23F8" : "\u25B6";
 
     public string TransportStatusText => _transportStatusText;
 

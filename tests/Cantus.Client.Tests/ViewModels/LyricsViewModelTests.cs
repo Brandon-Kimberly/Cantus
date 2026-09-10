@@ -335,13 +335,13 @@ public sealed class LyricsViewModelTests
         vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName ?? string.Empty);
 
         // Assert - paused shows the play glyph
-        vm.PlayPauseGlyph.Should().Be("");
+        vm.PlayPauseGlyph.Should().Be("\u25B6");
 
         // Act
         vm.IsPlaying = true;
 
         // Assert - playing shows the pause glyph, and the glyph notified
-        vm.PlayPauseGlyph.Should().Be("");
+        vm.PlayPauseGlyph.Should().Be("\u23F8");
         changed.Should().Contain(nameof(LyricsViewModel.PlayPauseGlyph));
     }
 
