@@ -108,6 +108,16 @@ public sealed partial class MainPage : Page
             ViewModel.IsKioskMode = false;
             e.Handled = true;
         }
+        else if ((int)e.Key == 219) // [ (OEM4): reduce compensation, lyrics render earlier
+        {
+            ViewModel.AdjustLatencyCompensation(-50);
+            e.Handled = true;
+        }
+        else if ((int)e.Key == 221) // ] (OEM6): increase compensation, lyrics render later
+        {
+            ViewModel.AdjustLatencyCompensation(50);
+            e.Handled = true;
+        }
     }
 
     public Visibility GetStandardDesktopViewVisibility(LayoutBreakpoint? breakpoint = null)

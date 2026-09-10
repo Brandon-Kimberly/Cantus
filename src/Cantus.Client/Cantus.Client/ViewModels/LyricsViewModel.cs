@@ -27,7 +27,16 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
     private int _activeLineIndex = -1;
     private long _interpolatedProgressMs;
     private long _lastTickTimestampMs;
-    private const int DEFAULT_ACOUSTIC_LATENCY_COMPENSATION_MS = 200;
+
+    // Compensates for the delay between a position estimate and the audio
+    // actually reaching the listener's ears (Bluetooth speakers, TV audio
+    // chains). Persisted per device; [ and ] adjust it in 50ms steps.
+    private const string SETTINGS_KEY_LATENCY = "cantus_latency_ms";
+    private const int DEFAULT_LATENCY_COMPENSATION_MS = 200;
+    private const int LATENCY_STEP_MS = 50;
+    private const int MIN_LATENCY_COMPENSATION_MS = 0;
+    private const int MAX_LATENCY_COMPENSATION_MS = 1000;
+    private int _latencyCompensationMs = LoadLatencyCompensation();
 
     private string _connectionStatus = "Connecting...";
     private long _rttMs;
@@ -297,7 +306,15 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
     public bool IsInstrumentalBreak
     {
         get => _isInstrumentalBreak;
-        set { if (_isInstrumentalBreak != value) { _isInstrumentalBreak = value; OnPropertyChanged(); } }
+        set
+        {
+            if (_isInstrumentalBreak != value)
+            {
+                _isInstrumentalBreak = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(InstrumentalBreakVisibility));
+            }
+        }
     }
 
     public string InstrumentalBreakText
@@ -305,6 +322,9 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
         get => _instrumentalBreakText;
         set { if (_instrumentalBreakText != value) { _instrumentalBreakText = value; OnPropertyChanged(); } }
     }
+
+    public Visibility InstrumentalBreakVisibility =>
+        IsInstrumentalBreak && HasSyncedLyrics && !IsStaticLyricsMode ? Visibility.Visible : Visibility.Collapsed;
 
     public bool IsAuthorized =>
         AuthorizedSessionsCount > 0 ||
@@ -355,6 +375,7 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
                 OnPropertyChanged(nameof(ModeToggleGlyph));
                 OnPropertyChanged(nameof(StaticLyricsText));
                 OnPropertyChanged(nameof(AutoScrollToggleVisibility));
+                OnPropertyChanged(nameof(InstrumentalBreakVisibility));
                 OnPropertyChanged(nameof(ResumeAutoScrollVisibility));
             }
         }
@@ -411,6 +432,36 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
             }
         }
     }
+
+    public int LatencyCompensationMs
+    {
+        get => _latencyCompensationMs;
+        internal set
+        {
+            int clamped = Math.Clamp(value, MIN_LATENCY_COMPENSATION_MS, MAX_LATENCY_COMPENSATION_MS);
+            if (_latencyCompensationMs != clamped)
+            {
+                _latencyCompensationMs = clamped;
+                SaveLatencyCompensation(clamped);
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(CalibrationText));
+            }
+        }
+    }
+
+    public string CalibrationText => $"{_latencyCompensationMs} ms";
+
+    /// <summary>
+    /// Adjusts the device latency compensation. Positive deltas render lyrics
+    /// later; negative deltas render them earlier (the fix when lyrics trail
+    /// the audio). Bound to the [ and ] keys and the settings steppers.
+    /// </summary>
+    public void AdjustLatencyCompensation(int deltaMs)
+    {
+        LatencyCompensationMs = _latencyCompensationMs + deltaMs;
+    }
+
+    internal long InterpolatedProgressMs => _interpolatedProgressMs;
 
     public string AutoScrollToggleText => IsAutoScrollEnabled ? "Autoscroll" : "Free Scroll";
     public string AutoScrollToggleGlyph => IsAutoScrollEnabled ? "\uE73E" : "\uE711";
@@ -721,11 +772,11 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
         {
             long serverTimestamp = state.TimestampUtc.ToUnixTimeMilliseconds();
             long elapsed = Math.Max(0, localNow - serverTimestamp);
-            targetMs = Math.Max(0, state.ProgressMs + elapsed - DEFAULT_ACOUSTIC_LATENCY_COMPENSATION_MS);
+            targetMs = Math.Max(0, state.ProgressMs + elapsed - _latencyCompensationMs);
         }
         else
         {
-            targetMs = Math.Max(0, state.ProgressMs - DEFAULT_ACOUSTIC_LATENCY_COMPENSATION_MS);
+            targetMs = Math.Max(0, state.ProgressMs - _latencyCompensationMs);
         }
 
         long drift = Math.Abs(_interpolatedProgressMs - targetMs);
@@ -788,6 +839,7 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(StaticLyricsVisibility));
         OnPropertyChanged(nameof(ModeToggleVisibility));
         OnPropertyChanged(nameof(AutoScrollToggleVisibility));
+        OnPropertyChanged(nameof(InstrumentalBreakVisibility));
         OnPropertyChanged(nameof(ResumeAutoScrollVisibility));
         OnPropertyChanged(nameof(HasSyncedLyrics));
         OnPropertyChanged(nameof(HasPlainLyrics));
@@ -959,7 +1011,7 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
 
             long serverTimestamp = _lastPlaybackState.TimestampUtc.ToUnixTimeMilliseconds();
             long elapsed = Math.Max(0, localNow - serverTimestamp);
-            long targetMs = Math.Max(0, _lastPlaybackState.ProgressMs + elapsed - DEFAULT_ACOUSTIC_LATENCY_COMPENSATION_MS);
+            long targetMs = Math.Max(0, _lastPlaybackState.ProgressMs + elapsed - _latencyCompensationMs);
 
             // Monotonic Phase-Locked Loop (PLL) tracking
             long error = targetMs - _interpolatedProgressMs;
@@ -977,7 +1029,7 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
         }
         else
         {
-            _interpolatedProgressMs = Math.Max(0, _lastPlaybackState.ProgressMs - DEFAULT_ACOUSTIC_LATENCY_COMPENSATION_MS);
+            _interpolatedProgressMs = Math.Max(0, _lastPlaybackState.ProgressMs - _latencyCompensationMs);
             _lastTickTimestampMs = localNow;
         }
 
@@ -1159,6 +1211,37 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
             if (Windows.Storage.ApplicationData.Current?.LocalSettings?.Values is { } settings)
             {
                 settings[SETTINGS_KEY_AUTOSCROLL] = value;
+            }
+        }
+        catch
+        {
+        }
+    }
+
+    private static int LoadLatencyCompensation()
+    {
+        try
+        {
+            object? val = Windows.Storage.ApplicationData.Current?.LocalSettings?.Values[SETTINGS_KEY_LATENCY];
+            if (val is int i) return Math.Clamp(i, MIN_LATENCY_COMPENSATION_MS, MAX_LATENCY_COMPENSATION_MS);
+            if (val is string s && int.TryParse(s, out int parsed))
+            {
+                return Math.Clamp(parsed, MIN_LATENCY_COMPENSATION_MS, MAX_LATENCY_COMPENSATION_MS);
+            }
+        }
+        catch
+        {
+        }
+        return DEFAULT_LATENCY_COMPENSATION_MS;
+    }
+
+    private static void SaveLatencyCompensation(int value)
+    {
+        try
+        {
+            if (Windows.Storage.ApplicationData.Current?.LocalSettings?.Values is { } settings)
+            {
+                settings[SETTINGS_KEY_LATENCY] = value;
             }
         }
         catch
