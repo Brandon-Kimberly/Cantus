@@ -686,6 +686,9 @@ public sealed class LyricsViewModelTests
         // Assert
         long delta = vmA.InterpolatedProgressMs - vmB.InterpolatedProgressMs;
         delta.Should().BeInRange(150, 250);
+    }
+
+    [Fact]
     public void InstrumentalBreakVisibility_RequiresBreakWithSyncedLiveLyrics()
     {
         // Arrange - synced lyrics loaded
