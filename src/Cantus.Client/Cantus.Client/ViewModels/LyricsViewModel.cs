@@ -300,7 +300,15 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
     public bool IsInstrumentalBreak
     {
         get => _isInstrumentalBreak;
-        set { if (_isInstrumentalBreak != value) { _isInstrumentalBreak = value; OnPropertyChanged(); } }
+        set
+        {
+            if (_isInstrumentalBreak != value)
+            {
+                _isInstrumentalBreak = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(InstrumentalBreakVisibility));
+            }
+        }
     }
 
     public string InstrumentalBreakText
@@ -308,6 +316,9 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
         get => _instrumentalBreakText;
         set { if (_instrumentalBreakText != value) { _instrumentalBreakText = value; OnPropertyChanged(); } }
     }
+
+    public Visibility InstrumentalBreakVisibility =>
+        IsInstrumentalBreak && HasSyncedLyrics && !IsStaticLyricsMode ? Visibility.Visible : Visibility.Collapsed;
 
     public bool IsAuthorized =>
         AuthorizedSessionsCount > 0 ||
@@ -358,6 +369,7 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
                 OnPropertyChanged(nameof(ModeToggleGlyph));
                 OnPropertyChanged(nameof(StaticLyricsText));
                 OnPropertyChanged(nameof(AutoScrollToggleVisibility));
+                OnPropertyChanged(nameof(InstrumentalBreakVisibility));
                 OnPropertyChanged(nameof(ResumeAutoScrollVisibility));
             }
         }
@@ -821,6 +833,7 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(StaticLyricsVisibility));
         OnPropertyChanged(nameof(ModeToggleVisibility));
         OnPropertyChanged(nameof(AutoScrollToggleVisibility));
+        OnPropertyChanged(nameof(InstrumentalBreakVisibility));
         OnPropertyChanged(nameof(ResumeAutoScrollVisibility));
         OnPropertyChanged(nameof(HasSyncedLyrics));
         OnPropertyChanged(nameof(HasPlainLyrics));
