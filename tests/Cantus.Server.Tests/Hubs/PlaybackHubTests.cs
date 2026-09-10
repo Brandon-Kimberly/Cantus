@@ -22,6 +22,7 @@ public sealed class PlaybackHubTests
     private readonly Mock<IHubCallerClients<IPlaybackClient>> _mockClients = new();
     private readonly Mock<IPlaybackClient> _mockCaller = new();
     private readonly Mock<IPlaybackClient> _mockUserGroup = new();
+    private readonly Mock<ISpotifyPlayerClient> _mockPlayerClient = new();
     private readonly Mock<ISessionTokenResolver> _mockSessionResolver = new();
     private readonly Mock<IGroupManager> _mockGroups = new();
     private readonly Mock<HubCallerContext> _mockContext = new();
@@ -38,6 +39,7 @@ public sealed class PlaybackHubTests
             _mockRegistry.Object,
             _mockLyricsCache.Object,
             _mockAuthService.Object,
+            _mockPlayerClient.Object,
             _mockSessionResolver.Object,
             NullLogger<PlaybackHub>.Instance)
         {
@@ -221,6 +223,91 @@ public sealed class PlaybackHubTests
 
         _mockRegistry.Verify(r => r.UnregisterConnection("test-conn-id"), Times.Once);
         _mockGroups.Verify(g => g.RemoveFromGroupAsync("test-conn-id", "user_user-1", default), Times.Once);
+    }
+
+    [Theory]
+    [InlineData("pause")]
+    [InlineData("resume")]
+    [InlineData("next")]
+    [InlineData("previous")]
+    public async Task SendPlayerCommand_WhenSubscribedWithSession_ExecutesCommandAndRequestsRefresh(string command)
+    {
+        _mockRegistry.Setup(r => r.GetConnectionSubscription("test-conn-id")).Returns("user-1");
+        _mockAuthService.Setup(a => a.GetSessionAsync("user-1", default)).ReturnsAsync(new UserSession
+        {
+            Id = "user-1",
+            SpotifyUserId = "sp-1",
+            DisplayName = "Alice",
+            AccessToken = "access-token-1",
+            RefreshToken = "ref"
+        });
+        _mockPlayerClient.Setup(p => p.PausePlaybackAsync("access-token-1", default)).ReturnsAsync(PlayerCommandResult.Success);
+        _mockPlayerClient.Setup(p => p.ResumePlaybackAsync("access-token-1", default)).ReturnsAsync(PlayerCommandResult.Success);
+        _mockPlayerClient.Setup(p => p.SkipToNextAsync("access-token-1", default)).ReturnsAsync(PlayerCommandResult.Success);
+        _mockPlayerClient.Setup(p => p.SkipToPreviousAsync("access-token-1", default)).ReturnsAsync(PlayerCommandResult.Success);
+
+        int result = await _hub.SendPlayerCommand(command);
+
+        result.Should().Be((int)PlayerCommandResult.Success);
+        // AtLeastOnce: delayed follow-up polls may also fire while the test runs.
+        _mockRegistry.Verify(r => r.RequestUserActivity("user-1"), Times.AtLeastOnce);
+    }
+
+    [Fact]
+    public async Task SendPlayerCommand_WhenNotSubscribed_FailsWithoutCallingSpotify()
+    {
+        _mockRegistry.Setup(r => r.GetConnectionSubscription("test-conn-id")).Returns((string?)null);
+
+        int result = await _hub.SendPlayerCommand("pause");
+
+        result.Should().Be((int)PlayerCommandResult.Failed);
+        _mockPlayerClient.Verify(
+            p => p.PausePlaybackAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+        _mockRegistry.Verify(r => r.RequestUserActivity(It.IsAny<string>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData(PlayerCommandResult.MissingPermissions)]
+    [InlineData(PlayerCommandResult.NoActiveDevice)]
+    [InlineData(PlayerCommandResult.Failed)]
+    public async Task SendPlayerCommand_WhenSpotifyRejectsCommand_PropagatesResultWithoutRefresh(
+        PlayerCommandResult rejection)
+    {
+        _mockRegistry.Setup(r => r.GetConnectionSubscription("test-conn-id")).Returns("user-1");
+        _mockAuthService.Setup(a => a.GetSessionAsync("user-1", default)).ReturnsAsync(new UserSession
+        {
+            Id = "user-1",
+            SpotifyUserId = "sp-1",
+            DisplayName = "Alice",
+            AccessToken = "access-token-1",
+            RefreshToken = "ref"
+        });
+        _mockPlayerClient.Setup(p => p.PausePlaybackAsync("access-token-1", default)).ReturnsAsync(rejection);
+
+        int result = await _hub.SendPlayerCommand("pause");
+
+        result.Should().Be((int)rejection);
+        _mockRegistry.Verify(r => r.RequestUserActivity(It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task SendPlayerCommand_WithUnknownCommand_Fails()
+    {
+        _mockRegistry.Setup(r => r.GetConnectionSubscription("test-conn-id")).Returns("user-1");
+        _mockAuthService.Setup(a => a.GetSessionAsync("user-1", default)).ReturnsAsync(new UserSession
+        {
+            Id = "user-1",
+            SpotifyUserId = "sp-1",
+            DisplayName = "Alice",
+            AccessToken = "access-token-1",
+            RefreshToken = "ref"
+        });
+
+        int result = await _hub.SendPlayerCommand("shuffle");
+
+        result.Should().Be((int)PlayerCommandResult.Failed);
+        _mockRegistry.Verify(r => r.RequestUserActivity(It.IsAny<string>()), Times.Never);
     }
 
     private sealed class RequestCookieCollection : IRequestCookieCollection

@@ -97,4 +97,77 @@ public sealed class SpotifyPlayerClient : ISpotifyPlayerClient
             return null;
         }
     }
+
+    public Task<PlayerCommandResult> PausePlaybackAsync(string accessToken, CancellationToken cancellationToken = default)
+    {
+        return ExecutePlayerCommandAsync(
+            accessToken,
+            "pause",
+            spotify => spotify.Player.PausePlayback(new PlayerPausePlaybackRequest(), cancellationToken));
+    }
+
+    public Task<PlayerCommandResult> ResumePlaybackAsync(string accessToken, CancellationToken cancellationToken = default)
+    {
+        return ExecutePlayerCommandAsync(
+            accessToken,
+            "resume",
+            spotify => spotify.Player.ResumePlayback(new PlayerResumePlaybackRequest(), cancellationToken));
+    }
+
+    public Task<PlayerCommandResult> SkipToNextAsync(string accessToken, CancellationToken cancellationToken = default)
+    {
+        return ExecutePlayerCommandAsync(
+            accessToken,
+            "next",
+            spotify => spotify.Player.SkipNext(new PlayerSkipNextRequest(), cancellationToken));
+    }
+
+    public Task<PlayerCommandResult> SkipToPreviousAsync(string accessToken, CancellationToken cancellationToken = default)
+    {
+        return ExecutePlayerCommandAsync(
+            accessToken,
+            "previous",
+            spotify => spotify.Player.SkipPrevious(new PlayerSkipPreviousRequest(), cancellationToken));
+    }
+
+    private async Task<PlayerCommandResult> ExecutePlayerCommandAsync(
+        string accessToken,
+        string commandName,
+        Func<SpotifyClient, Task<bool>> command)
+    {
+        if (string.IsNullOrWhiteSpace(accessToken))
+        {
+            return PlayerCommandResult.Failed;
+        }
+
+        try
+        {
+            SpotifyClient spotify = new(accessToken);
+            bool accepted = await command(spotify);
+            return accepted ? PlayerCommandResult.Success : PlayerCommandResult.Failed;
+        }
+        catch (APIException ex)
+        {
+            // 403 means the session lacks the user-modify-playback-state scope
+            // (re-link required) or the account is not Premium; 404 means no
+            // active playback device.
+            _logger.LogWarning(
+                "Spotify player command {Command} failed with {StatusCode}: {Message}",
+                commandName,
+                ex.Response?.StatusCode,
+                ex.Message);
+
+            return ex.Response?.StatusCode switch
+            {
+                System.Net.HttpStatusCode.Forbidden => PlayerCommandResult.MissingPermissions,
+                System.Net.HttpStatusCode.NotFound => PlayerCommandResult.NoActiveDevice,
+                _ => PlayerCommandResult.Failed
+            };
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogError(ex, "Error sending Spotify player command {Command}.", commandName);
+            return PlayerCommandResult.Failed;
+        }
+    }
 }

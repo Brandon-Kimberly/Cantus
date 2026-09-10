@@ -25,6 +25,21 @@ public sealed partial class MiniPlaybackBar : UserControl
         this.InitializeComponent();
     }
 
+    private async void OnSkipPreviousClicked(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel is not null) await ViewModel.SkipToPreviousAsync();
+    }
+
+    private async void OnTogglePlayPauseClicked(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel is not null) await ViewModel.TogglePlayPauseAsync();
+    }
+
+    private async void OnSkipNextClicked(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel is not null) await ViewModel.SkipToNextAsync();
+    }
+
     private void OnToggleKioskClicked(object sender, RoutedEventArgs e)
     {
         ViewModel?.ToggleKioskMode();

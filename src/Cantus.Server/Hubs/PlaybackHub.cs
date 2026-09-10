@@ -14,6 +14,7 @@ public sealed class PlaybackHub : Hub<IPlaybackClient>
     private readonly IPlaybackSessionRegistry _registry;
     private readonly ILyricsCacheRepository _lyricsCache;
     private readonly ISpotifyAuthService _authService;
+    private readonly ISpotifyPlayerClient _playerClient;
     private readonly ISessionTokenResolver _sessionResolver;
     private readonly ILogger<PlaybackHub> _logger;
 
@@ -21,12 +22,14 @@ public sealed class PlaybackHub : Hub<IPlaybackClient>
         IPlaybackSessionRegistry registry,
         ILyricsCacheRepository lyricsCache,
         ISpotifyAuthService authService,
+        ISpotifyPlayerClient playerClient,
         ISessionTokenResolver sessionResolver,
         ILogger<PlaybackHub> logger)
     {
         _registry = registry;
         _lyricsCache = lyricsCache;
         _authService = authService;
+        _playerClient = playerClient;
         _sessionResolver = sessionResolver;
         _logger = logger;
     }
@@ -290,5 +293,81 @@ public sealed class PlaybackHub : Hub<IPlaybackClient>
         }
 
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Executes a playback transport command ("pause", "resume", "next",
+    /// "previous") against the caller's own Spotify session. The result tells
+    /// the client why a command was rejected (missing
+    /// user-modify-playback-state scope on sessions linked before the scope was
+    /// added, non-Premium account, or no active device) so it can surface a
+    /// hint instead of failing silently. On success polls are requested so
+    /// every connected client sees the new state quickly. The result crosses
+    /// the wire as an int: the trimmed WASM client cannot deserialize enum
+    /// return values, so both ends cast PlayerCommandResult explicitly.
+    /// </summary>
+    public async Task<int> SendPlayerCommand(string command)
+    {
+        string? userId = _registry.GetConnectionSubscription(Context.ConnectionId);
+        if (string.IsNullOrEmpty(userId))
+        {
+            return (int)PlayerCommandResult.Failed;
+        }
+
+        UserSession? session = await _authService.GetSessionAsync(userId);
+        if (session is null || string.IsNullOrWhiteSpace(session.AccessToken))
+        {
+            return (int)PlayerCommandResult.Failed;
+        }
+
+        _logger.LogInformation("Player command {Command} requested by user {UserId}", command, userId);
+
+        PlayerCommandResult result = command switch
+        {
+            "pause" => await _playerClient.PausePlaybackAsync(session.AccessToken),
+            "resume" => await _playerClient.ResumePlaybackAsync(session.AccessToken),
+            "next" => await _playerClient.SkipToNextAsync(session.AccessToken),
+            "previous" => await _playerClient.SkipToPreviousAsync(session.AccessToken),
+            _ => PlayerCommandResult.Failed
+        };
+
+        if (result == PlayerCommandResult.Success)
+        {
+            _registry.RequestUserActivity(userId);
+            ScheduleFollowUpPolls(userId);
+        }
+
+        return (int)result;
+    }
+
+    // Spotify's API is eventually consistent: a poll fired immediately after
+    // an accepted command often still returns the previous state. The first
+    // follow-up gives Spotify time to commit the change; the second is a
+    // safety net for slower propagation.
+    private const int FIRST_FOLLOW_UP_POLL_DELAY_MS = 400;
+    private const int SECOND_FOLLOW_UP_POLL_DELAY_MS = 1100;
+
+    /// <summary>
+    /// Two short follow-up polls after an accepted player command, so every
+    /// connected client sees the committed state quickly instead of waiting
+    /// for the next adaptive poll seconds later.
+    /// </summary>
+    private void ScheduleFollowUpPolls(string userId)
+    {
+        IPlaybackSessionRegistry registry = _registry;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(FIRST_FOLLOW_UP_POLL_DELAY_MS));
+                registry.RequestUserActivity(userId);
+                await Task.Delay(TimeSpan.FromMilliseconds(SECOND_FOLLOW_UP_POLL_DELAY_MS));
+                registry.RequestUserActivity(userId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Follow-up playback poll failed for user {UserId}", userId);
+            }
+        });
     }
 }

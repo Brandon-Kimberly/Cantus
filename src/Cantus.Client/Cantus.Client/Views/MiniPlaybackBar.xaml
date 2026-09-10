@@ -10,7 +10,7 @@
             BorderThickness="1"
             CornerRadius="16"
             Padding="20,12">
-        <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+        <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="Auto,*,Auto,Auto,Auto">
             <!-- Mini Track Info -->
             <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="14" VerticalAlignment="Center">
                 <Border CornerRadius="8" Width="44" Height="44" Background="#1E1E2D">
@@ -36,8 +36,42 @@
             <!-- Timestamps -->
             <TextBlock Grid.Column="2" Text="{x:Bind ViewModel.ProgressText, Mode=OneWay}" FontSize="13" Foreground="{x:Bind ViewModel.TextMutedBrush, Mode=OneWay}" FontFamily="Consolas" VerticalAlignment="Center" Margin="0,0,16,0" />
 
+            <!-- Transport Controls -->
+            <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="0,0,16,0">
+                <Button Click="OnSkipPreviousClicked"
+                        Background="#22FFFFFF"
+                        Foreground="{x:Bind ViewModel.TextPrimaryBrush, Mode=OneWay}"
+                        CornerRadius="16"
+                        Width="32"
+                        Height="32"
+                        Padding="0"
+                        ToolTipService.ToolTip="Previous track">
+                    <FontIcon Glyph="&#xE892;" FontSize="11" />
+                </Button>
+                <Button Click="OnTogglePlayPauseClicked"
+                        Background="{x:Bind ViewModel.PrimaryAccentBrush, Mode=OneWay}"
+                        Foreground="White"
+                        CornerRadius="18"
+                        Width="36"
+                        Height="36"
+                        Padding="0"
+                        ToolTipService.ToolTip="Play / Pause">
+                    <FontIcon Glyph="{x:Bind ViewModel.PlayPauseGlyph, Mode=OneWay}" FontSize="13" />
+                </Button>
+                <Button Click="OnSkipNextClicked"
+                        Background="#22FFFFFF"
+                        Foreground="{x:Bind ViewModel.TextPrimaryBrush, Mode=OneWay}"
+                        CornerRadius="16"
+                        Width="32"
+                        Height="32"
+                        Padding="0"
+                        ToolTipService.ToolTip="Next track">
+                    <FontIcon Glyph="&#xE893;" FontSize="11" />
+                </Button>
+            </StackPanel>
+
             <!-- Exit Kiosk Button -->
-            <Button Grid.Column="3"
+            <Button Grid.Column="4"
                     Click="OnToggleKioskClicked"
                     Background="#22FFFFFF"
                     Foreground="{x:Bind ViewModel.TextPrimaryBrush, Mode=OneWay}"
@@ -48,6 +82,18 @@
                     <TextBlock Text="Exit Kiosk" FontSize="12" />
                 </StackPanel>
             </Button>
+
+            <!-- Transport Command Feedback -->
+            <TextBlock Grid.Row="1"
+                       Grid.ColumnSpan="5"
+                       Text="{x:Bind ViewModel.TransportStatusText, Mode=OneWay}"
+                       Visibility="{x:Bind ViewModel.TransportStatusVisibility, Mode=OneWay}"
+                       FontSize="12"
+                       Foreground="{x:Bind ViewModel.TextSecondaryBrush, Mode=OneWay}"
+                       TextWrapping="Wrap"
+                       TextAlignment="Center"
+                       HorizontalAlignment="Center"
+                       Margin="0,8,0,0" />
         </Grid>
     </Border>
 </UserControl>

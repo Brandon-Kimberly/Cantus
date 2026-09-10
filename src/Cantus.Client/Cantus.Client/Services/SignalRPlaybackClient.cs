@@ -633,6 +633,28 @@ public sealed class SignalRPlaybackClient : ISignalRPlaybackClient
         }
     }
 
+    public async Task<PlayerCommandResult> SendPlayerCommandAsync(string command)
+    {
+        if (_connection is not null && _connection.State == HubConnectionState.Connected)
+        {
+            try
+            {
+                // The hub returns the result as an int: the trimmed WASM build
+                // cannot deserialize enum return values from SignalR.
+                int result = await _connection.InvokeAsync<int>("SendPlayerCommand", command);
+                return result >= (int)PlayerCommandResult.Success && result <= (int)PlayerCommandResult.Failed
+                    ? (PlayerCommandResult)result
+                    : PlayerCommandResult.Failed;
+            }
+            catch
+            {
+                return PlayerCommandResult.Failed;
+            }
+        }
+
+        return PlayerCommandResult.Failed;
+    }
+
     public async Task SubscribeToUserAsync(string? userId)
     {
         if (_connection is not null && _connection.State == HubConnectionState.Connected)

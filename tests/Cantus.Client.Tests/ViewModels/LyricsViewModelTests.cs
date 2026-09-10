@@ -326,6 +326,111 @@ public sealed class LyricsViewModelTests
     }
 
     [Fact]
+    public void PlayPauseGlyph_TracksPlayingState()
+    {
+        // Arrange
+        SignalRPlaybackClient client = new();
+        LyricsViewModel vm = new(client);
+        List<string> changed = new();
+        vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName ?? string.Empty);
+
+        // Assert - paused shows the play glyph
+        vm.PlayPauseGlyph.Should().Be("\u25B6");
+
+        // Act
+        vm.IsPlaying = true;
+
+        // Assert - playing shows the pause glyph, and the glyph notified
+        vm.PlayPauseGlyph.Should().Be("\u23F8");
+        changed.Should().Contain(nameof(LyricsViewModel.PlayPauseGlyph));
+    }
+
+    [Fact]
+    public async Task TogglePlayPauseAsync_WithNoTrack_DoesNothing()
+    {
+        // Arrange
+        SignalRPlaybackClient client = new();
+        LyricsViewModel vm = new(client);
+        vm.IsPlaying = true;
+
+        // Act
+        await vm.TogglePlayPauseAsync();
+
+        // Assert - no track loaded, so no command and no state flip
+        vm.IsPlaying.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task TogglePlayPauseAsync_WhenCommandFails_DoesNotFlipPlayingStateAndShowsStatus()
+    {
+        // Arrange - disconnected client, so the command fails
+        SignalRPlaybackClient client = new();
+        LyricsViewModel vm = new(client);
+        client.RaisePlaybackStateReceived(new PlaybackStatePayload
+        {
+            CurrentTrack = new TrackInfoPayload { Id = "t-1", Title = "Song", Artist = "Artist" },
+            IsPlaying = true,
+            TimestampUtc = DateTimeOffset.UtcNow
+        });
+        vm.IsPlaying.Should().BeTrue();
+
+        // Act
+        await vm.TogglePlayPauseAsync();
+
+        // Assert - the optimistic flip only happens on success, and the failure is surfaced
+        vm.IsPlaying.Should().BeTrue();
+        vm.TransportStatusText.Should().NotBeEmpty();
+        vm.TransportStatusVisibility.Should().Be(Visibility.Visible);
+    }
+
+    [Fact]
+    public void ReportTransportResult_MapsResultsToUserGuidance()
+    {
+        // Arrange
+        SignalRPlaybackClient client = new();
+        LyricsViewModel vm = new(client);
+
+        // Assert - nothing shown by default
+        vm.TransportStatusVisibility.Should().Be(Visibility.Collapsed);
+
+        // Missing scope / non-Premium points at re-linking the account
+        vm.ReportTransportResult(Cantus.Core.Models.PlayerCommandResult.MissingPermissions);
+        vm.TransportStatusText.Should().Contain("reconnect");
+        vm.TransportStatusVisibility.Should().Be(Visibility.Visible);
+
+        // No active device points at starting playback
+        vm.ReportTransportResult(Cantus.Core.Models.PlayerCommandResult.NoActiveDevice);
+        vm.TransportStatusText.Should().Contain("device");
+
+        // Success clears any prior message
+        vm.ReportTransportResult(Cantus.Core.Models.PlayerCommandResult.Success);
+        vm.TransportStatusText.Should().BeEmpty();
+        vm.TransportStatusVisibility.Should().Be(Visibility.Collapsed);
+    }
+
+    [Fact]
+    public async Task SkipCommands_WithNoTrackOrConnection_DoNotThrow()
+    {
+        // Arrange
+        SignalRPlaybackClient client = new();
+        LyricsViewModel vm = new(client);
+
+        // Act & Assert - no track: early return; with track but disconnected: graceful false
+        await vm.SkipToNextAsync();
+        await vm.SkipToPreviousAsync();
+
+        client.RaisePlaybackStateReceived(new PlaybackStatePayload
+        {
+            CurrentTrack = new TrackInfoPayload { Id = "t-1", Title = "Song", Artist = "Artist" },
+            IsPlaying = true,
+            TimestampUtc = DateTimeOffset.UtcNow
+        });
+
+        await vm.SkipToNextAsync();
+        await vm.SkipToPreviousAsync();
+    }
+
+    [Fact]
     public void ServerBaseUrl_DerivesBaseUrlFromClient()
     {
         // Arrange

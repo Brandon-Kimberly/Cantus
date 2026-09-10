@@ -71,6 +71,52 @@
                         </Grid>
                     </StackPanel>
 
+                    <!-- Playback Transport Controls -->
+                    <Grid ColumnDefinitions="*,Auto,Auto,Auto,*" ColumnSpacing="12">
+                        <Button Grid.Column="1"
+                                Click="OnSkipPreviousClicked"
+                                Background="#20FFFFFF"
+                                Foreground="{x:Bind ViewModel.TextPrimaryBrush, Mode=OneWay}"
+                                CornerRadius="20"
+                                Width="40"
+                                Height="40"
+                                Padding="0"
+                                ToolTipService.ToolTip="Previous track">
+                            <FontIcon Glyph="&#xE892;" FontSize="14" />
+                        </Button>
+                        <Button Grid.Column="2"
+                                Click="OnTogglePlayPauseClicked"
+                                Background="{x:Bind ViewModel.PrimaryAccentBrush, Mode=OneWay}"
+                                Foreground="White"
+                                CornerRadius="24"
+                                Width="48"
+                                Height="48"
+                                Padding="0"
+                                ToolTipService.ToolTip="Play / Pause">
+                            <FontIcon Glyph="{x:Bind ViewModel.PlayPauseGlyph, Mode=OneWay}" FontSize="18" />
+                        </Button>
+                        <Button Grid.Column="3"
+                                Click="OnSkipNextClicked"
+                                Background="#20FFFFFF"
+                                Foreground="{x:Bind ViewModel.TextPrimaryBrush, Mode=OneWay}"
+                                CornerRadius="20"
+                                Width="40"
+                                Height="40"
+                                Padding="0"
+                                ToolTipService.ToolTip="Next track">
+                            <FontIcon Glyph="&#xE893;" FontSize="14" />
+                        </Button>
+                    </Grid>
+
+                    <!-- Transport Command Feedback -->
+                    <TextBlock Text="{x:Bind ViewModel.TransportStatusText, Mode=OneWay}"
+                               Visibility="{x:Bind ViewModel.TransportStatusVisibility, Mode=OneWay}"
+                               FontSize="12"
+                               Foreground="{x:Bind ViewModel.TextSecondaryBrush, Mode=OneWay}"
+                               TextWrapping="Wrap"
+                               TextAlignment="Center"
+                               HorizontalAlignment="Center" />
+
                     <!-- Instrumental Break Indicator -->
                     <Border Background="{x:Bind ViewModel.GlowBrush, Mode=OneWay}"
                             BorderBrush="{x:Bind ViewModel.PrimaryAccentBrush, Mode=OneWay}"
@@ -178,7 +224,8 @@
 
             <!-- Compact / Mobile Horizontal Now Playing Strip -->
             <Grid Visibility="{x:Bind GetMobileStripVisibility(ViewModel.CurrentBreakpoint), Mode=OneWay}"
-                  ColumnDefinitions="Auto,*,Auto"
+                  RowDefinitions="Auto,Auto"
+                  ColumnDefinitions="Auto,*,Auto,Auto"
                   ColumnSpacing="12">
                 <!-- Mini Album Art -->
                 <Border Grid.Column="0"
@@ -221,6 +268,49 @@
                     <TextBlock Text="{x:Bind ViewModel.ProgressText, Mode=OneWay}" FontSize="11" Foreground="{x:Bind ViewModel.TextMutedBrush, Mode=OneWay}" FontFamily="Consolas" HorizontalAlignment="Right" />
                     <TextBlock Text="{x:Bind ViewModel.OffsetText, Mode=OneWay}" FontSize="10" Foreground="{x:Bind ViewModel.PrimaryAccentBrush, Mode=OneWay}" HorizontalAlignment="Right" />
                 </StackPanel>
+
+                <!-- Compact Transport Controls -->
+                <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                    <Button Click="OnSkipPreviousClicked"
+                            Background="#20FFFFFF"
+                            Foreground="{x:Bind ViewModel.TextPrimaryBrush, Mode=OneWay}"
+                            CornerRadius="16"
+                            Width="32"
+                            Height="32"
+                            Padding="0">
+                        <FontIcon Glyph="&#xE892;" FontSize="11" />
+                    </Button>
+                    <Button Click="OnTogglePlayPauseClicked"
+                            Background="{x:Bind ViewModel.PrimaryAccentBrush, Mode=OneWay}"
+                            Foreground="White"
+                            CornerRadius="18"
+                            Width="36"
+                            Height="36"
+                            Padding="0">
+                        <FontIcon Glyph="{x:Bind ViewModel.PlayPauseGlyph, Mode=OneWay}" FontSize="13" />
+                    </Button>
+                    <Button Click="OnSkipNextClicked"
+                            Background="#20FFFFFF"
+                            Foreground="{x:Bind ViewModel.TextPrimaryBrush, Mode=OneWay}"
+                            CornerRadius="16"
+                            Width="32"
+                            Height="32"
+                            Padding="0">
+                        <FontIcon Glyph="&#xE893;" FontSize="11" />
+                    </Button>
+                </StackPanel>
+
+                <!-- Transport Command Feedback -->
+                <TextBlock Grid.Row="1"
+                           Grid.ColumnSpan="4"
+                           Text="{x:Bind ViewModel.TransportStatusText, Mode=OneWay}"
+                           Visibility="{x:Bind ViewModel.TransportStatusVisibility, Mode=OneWay}"
+                           FontSize="11"
+                           Foreground="{x:Bind ViewModel.TextSecondaryBrush, Mode=OneWay}"
+                           TextWrapping="Wrap"
+                           TextAlignment="Center"
+                           HorizontalAlignment="Center"
+                           Margin="0,6,0,0" />
             </Grid>
         </Grid>
     </Border>
