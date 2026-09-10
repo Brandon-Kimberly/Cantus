@@ -59,6 +59,16 @@ public sealed partial class MobileSettingsView : UserControl
         if (ViewModel is not null) await ViewModel.NudgeOffsetAsync(500);
     }
 
+    private void OnLatencyMinusClicked(object sender, RoutedEventArgs e)
+    {
+        ViewModel?.AdjustLatencyCompensation(-50);
+    }
+
+    private void OnLatencyPlusClicked(object sender, RoutedEventArgs e)
+    {
+        ViewModel?.AdjustLatencyCompensation(50);
+    }
+
     private async void OnConnectSpotifyClicked(object sender, RoutedEventArgs e)
     {
         try
