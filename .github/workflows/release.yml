@@ -17,10 +17,65 @@ permissions:
 
 jobs:
   # ============================================================================
+  # 0. Centralized Version & Tag Preparation
+  # ============================================================================
+  prepare:
+    name: Prepare Release Metadata
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.VERSION }}
+      tag: ${{ steps.meta.outputs.TAG }}
+      is_prerelease: ${{ steps.meta.outputs.IS_PRERELEASE }}
+
+    steps:
+      - name: Parse and Validate Version & Tag
+        id: meta
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            RAW_VER="${{ github.event.inputs.version }}"
+            if [ -z "${RAW_VER}" ]; then
+              echo "::error::Release version tag is required when triggering manually."
+              exit 1
+            fi
+          else
+            if [[ ! "${{ github.ref }}" =~ ^refs/tags/ ]]; then
+              echo "::error::Release workflow triggered by push, but ref is not a tag: ${{ github.ref }}"
+              exit 1
+            fi
+            RAW_VER="${{ github.ref_name }}"
+          fi
+
+          CLEAN_VER="${RAW_VER#v}"
+
+          # Enforce SemVer 2.0 pattern (e.g. 1.0.0, 1.0.0-rc.1, 1.0.0-beta.2)
+          SEMVER_REGEX="^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$"
+          if [[ ! "${CLEAN_VER}" =~ ${SEMVER_REGEX} ]]; then
+            echo "::error::Invalid SemVer version: '${RAW_VER}'. Expected format like 'v1.0.0' or 'v1.0.0-rc.1'."
+            exit 1
+          fi
+
+          TAG="v${CLEAN_VER}"
+          IS_PRERELEASE="false"
+          if [[ "${CLEAN_VER}" == *"-"* ]]; then
+            IS_PRERELEASE="true"
+          fi
+
+          echo "VERSION=${CLEAN_VER}" >> $GITHUB_OUTPUT
+          echo "TAG=${TAG}" >> $GITHUB_OUTPUT
+          echo "IS_PRERELEASE=${IS_PRERELEASE}" >> $GITHUB_OUTPUT
+
+          echo "### 🚀 Release Metadata Prepared" >> $GITHUB_STEP_SUMMARY
+          echo "- **Target Tag**: \`${TAG}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Semantic Version**: \`${CLEAN_VER}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Pre-release**: \`${IS_PRERELEASE}\`" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================================================
   # 1. Multi-Architecture Container Publishing (GHCR)
   # ============================================================================
   publish-docker:
     name: Publish Multi-Arch Docker Image (GHCR)
+    needs: [prepare]
     runs-on: ubuntu-latest
 
     steps:
@@ -33,9 +88,10 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/') }}
+            type=semver,pattern={{version}},value=${{ needs.prepare.outputs.tag }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.prepare.outputs.tag }},enable=${{ needs.prepare.outputs.is_prerelease == 'false' }}
+            type=raw,value=latest,enable=${{ needs.prepare.outputs.is_prerelease == 'false' }}
+            type=raw,value=rc,enable=${{ needs.prepare.outputs.is_prerelease == 'true' }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -57,6 +113,9 @@ jobs:
           file: ./Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
+          build-args: |
+            APP_VERSION=${{ needs.prepare.outputs.version }}
+            COMMIT_SHA=${{ github.sha }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
@@ -67,6 +126,7 @@ jobs:
   # ============================================================================
   build-desktop-clients:
     name: Build Desktop Client (${{ matrix.name }})
+    needs: [prepare]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -94,14 +154,6 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: Determine Version
-        id: ver
-        shell: bash
-        run: |
-          RAW_VER="${{ github.event.inputs.version || github.ref_name }}"
-          CLEAN_VER="${RAW_VER#v}"
-          echo "VERSION=${CLEAN_VER:-1.0.0}" >> $GITHUB_OUTPUT
-
       - name: Publish Self-Contained Desktop Client
         run: >
           dotnet publish src/Cantus.Client/Cantus.Client/Cantus.Client.csproj
@@ -109,6 +161,8 @@ jobs:
           -r ${{ matrix.rid }}
           -c Release
           -p:PublishSingleFile=true
+          -p:Version="${{ needs.prepare.outputs.version }}"
+          -p:SourceRevisionId="${{ github.sha }}"
           --self-contained true
           -o ./publish
 
@@ -118,7 +172,7 @@ jobs:
         run: |
           mkdir -p ./artifacts
           tar -czvf "./artifacts/Cantus.Client-Linux-x64.tar.gz" -C ./publish .
-          ./packaging/linux/build-appimage.sh ./publish ./artifacts "${{ steps.ver.outputs.VERSION }}"
+          ./packaging/linux/build-appimage.sh ./publish ./artifacts "${{ needs.prepare.outputs.version }}"
 
       - name: Package Windows Artifacts
         if: runner.os == 'Windows'
@@ -133,7 +187,7 @@ jobs:
             choco install innosetup --yes --no-progress
             $isccPath = "C:\Program Files (x86)\Inno Setup 6\iscc.exe"
           }
-          & $isccPath /DSourceDir="$((Get-Location).Path)\publish" /DMyAppVersion="${{ steps.ver.outputs.VERSION }}" /O"$((Get-Location).Path)\artifacts" packaging\windows\installer.iss
+          & $isccPath /DSourceDir="$((Get-Location).Path)\publish" /DMyAppVersion="${{ needs.prepare.outputs.version }}" /O"$((Get-Location).Path)\artifacts" packaging\windows\installer.iss
 
       - name: Package macOS Artifacts
         if: runner.os == 'macOS'
@@ -153,6 +207,7 @@ jobs:
   # ============================================================================
   build-server-binaries:
     name: Build Server Binary (${{ matrix.name }})
+    needs: [prepare]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -192,6 +247,8 @@ jobs:
           dotnet publish src/Cantus.Client/Cantus.Client/Cantus.Client.csproj
           -f net10.0-browserwasm
           -c Release
+          -p:Version="${{ needs.prepare.outputs.version }}"
+          -p:SourceRevisionId="${{ github.sha }}"
           -o ./wasm_dist
 
       - name: Publish Standalone Server
@@ -200,6 +257,8 @@ jobs:
           -r ${{ matrix.rid }}
           -c Release
           -p:PublishSingleFile=true
+          -p:Version="${{ needs.prepare.outputs.version }}"
+          -p:SourceRevisionId="${{ github.sha }}"
           --self-contained true
           -o ./server_dist
 
@@ -234,7 +293,7 @@ jobs:
   # ============================================================================
   publish-release:
     name: Create GitHub Release
-    needs: [publish-docker, build-desktop-clients, build-server-binaries]
+    needs: [prepare, publish-docker, build-desktop-clients, build-server-binaries]
     runs-on: ubuntu-latest
 
     steps:
@@ -254,19 +313,12 @@ jobs:
           sha256sum * > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
-      - name: Determine Release Tag
-        id: release_tag
-        shell: bash
-        run: |
-          TAG="${{ github.event.inputs.version || github.ref_name }}"
-          echo "TAG=${TAG}" >> $GITHUB_OUTPUT
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.release_tag.outputs.TAG }}
+          tag_name: ${{ needs.prepare.outputs.tag }}
           files: |
             ./all_artifacts/*
           generate_release_notes: true
           draft: false
-          prerelease: false
+          prerelease: ${{ needs.prepare.outputs.is_prerelease == 'true' }}

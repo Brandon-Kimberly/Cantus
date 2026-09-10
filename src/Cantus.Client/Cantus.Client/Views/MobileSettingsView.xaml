@@ -164,6 +164,13 @@
                     </Border>
                 </StackPanel>
             </Border>
+
+            <!-- Application Version Footer -->
+            <TextBlock Text="{x:Bind ViewModel.AppVersionDisplay, Mode=OneWay}"
+                       FontSize="11"
+                       Foreground="{x:Bind ViewModel.TextMutedBrush, Mode=OneWay}"
+                       HorizontalAlignment="Center"
+                       Margin="0,8,0,4" />
         </StackPanel>
     </ScrollViewer>
 </UserControl>
