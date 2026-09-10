@@ -229,6 +229,10 @@
             navigateTo: function(url) {
                 window.location.href = url;
             },
+            getAuthQuery: function() {
+                var params = new URLSearchParams(window.location.search);
+                return params.get("auth") || "";
+            },
             cleanAuthQuery: function() {
                 if (window.location.search && (window.location.search.indexOf("auth=") !== -1)) {
                     var cleanUrl = window.location.pathname;

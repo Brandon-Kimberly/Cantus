@@ -10,8 +10,10 @@ using Microsoft.Extensions.Options;
 
 namespace Cantus.Infrastructure.Lyrics;
 
-public class LrclibLyricsProvider : ILyricsProvider
+public class LrclibLyricsProvider : ILyricsProvider, ILyricsFetchProvider
 {
+    public string ProviderName => "LRCLIB";
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
@@ -45,6 +47,20 @@ public class LrclibLyricsProvider : ILyricsProvider
         TrackInfo track,
         CancellationToken cancellationToken = default)
     {
+        LyricsFetchResult result = await FetchLyricsAsync(track, cancellationToken);
+        return result.Lyrics;
+    }
+
+    /// <summary>
+    /// Like <see cref="GetLyricsAsync"/>, but reports whether a null result is
+    /// authoritative ("LRCLIB has no lyrics for this track") or transient
+    /// ("LRCLIB was unreachable"), so callers can decide whether to
+    /// negative-cache it.
+    /// </summary>
+    public virtual async Task<LyricsFetchResult> FetchLyricsAsync(
+        TrackInfo track,
+        CancellationToken cancellationToken = default)
+    {
         ArgumentNullException.ThrowIfNull(track);
 
         try
@@ -53,17 +69,18 @@ public class LrclibLyricsProvider : ILyricsProvider
             LrclibResponseDto? exactResult = await TryGetExactLyricsAsync(track, cancellationToken);
             if (exactResult is not null)
             {
-                return MapToDomain(exactResult, track);
+                return LyricsFetchResult.Found(MapToDomain(exactResult, track));
             }
 
             // 2. Fallback to /api/search
             LrclibResponseDto? searchResult = await TrySearchLyricsAsync(track, cancellationToken);
             if (searchResult is not null)
             {
-                return MapToDomain(searchResult, track);
+                return LyricsFetchResult.Found(MapToDomain(searchResult, track));
             }
 
-            return null;
+            // Both endpoints answered without a match: an authoritative miss.
+            return LyricsFetchResult.NotFound();
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -73,7 +90,7 @@ public class LrclibLyricsProvider : ILyricsProvider
                 track.Id,
                 track.Artist,
                 track.Title);
-            return null;
+            return LyricsFetchResult.Unavailable();
         }
     }
 
@@ -111,10 +128,11 @@ public class LrclibLyricsProvider : ILyricsProvider
         string url = $"/api/search?q={Uri.EscapeDataString(query)}";
 
         using HttpResponseMessage response = await _httpClient.GetAsync(url, ct);
-        if (!response.IsSuccessStatusCode)
-        {
-            return null;
-        }
+
+        // A failed search (5xx, rate limit) must throw rather than read as
+        // "no results": the caller treats an empty search as an authoritative
+        // miss and negative-caches it.
+        response.EnsureSuccessStatusCode();
 
         List<LrclibResponseDto>? results = await response.Content.ReadFromJsonAsync<List<LrclibResponseDto>>(
             JsonOptions,

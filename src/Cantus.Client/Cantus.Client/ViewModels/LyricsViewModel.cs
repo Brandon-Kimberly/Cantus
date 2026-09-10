@@ -61,6 +61,8 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
     private const string SETTINGS_KEY_AUTOSCROLL = "cantus_autoscroll";
     private bool _isAutoScrollEnabled = LoadAutoScrollPreference();
     private bool _isUserScrollingPaused;
+    private Microsoft.UI.Xaml.Media.ImageSource? _ambientBackgroundSource;
+    private string? _lastAmbientArtworkUrl;
 
     public ObservableCollection<LyricLineViewModel> LyricLines { get; } = new();
     public ObservableCollection<AuthorizedSessionPayload> Sessions { get; } = new();
@@ -80,6 +82,8 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
     public Microsoft.UI.Xaml.Media.SolidColorBrush GlowBrush => _themeManager.GlowBrush;
     public Windows.UI.Color ActivePrimaryAccentColor => _themeManager.ActivePalette.PrimaryAccent;
     public Windows.UI.Color ActiveBackgroundColor => _themeManager.ActivePalette.Background;
+    public Microsoft.UI.Xaml.Media.ImageSource? AmbientBackgroundSource => _ambientBackgroundSource;
+    public Visibility AmbientBackgroundVisibility => _ambientBackgroundSource is null ? Visibility.Collapsed : Visibility.Visible;
 
     // Flattened Layout Properties for 1-level safe XAML {x:Bind}
     public LayoutBreakpoint CurrentBreakpoint => _layoutManager.CurrentBreakpoint;
@@ -260,6 +264,23 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
 
     public bool HasSyncedLyrics => _lastLyrics?.Lines is not null && _lastLyrics.Lines.Count > 0;
     public bool HasPlainLyrics => !string.IsNullOrWhiteSpace(_lastLyrics?.PlainLyrics);
+
+    // The empty lyrics stage previously always said "Connect Spotify and play
+    // music" - misleading when a track is already playing and lyrics simply
+    // don't exist for it.
+    public string EmptyStateTitle =>
+        _lastPlaybackState?.CurrentTrack is not null ? "No Lyrics Found" : "Waiting for Lyrics...";
+
+    public string EmptyStateSubtitle =>
+        _lastPlaybackState?.CurrentTrack is not null
+            ? "Lyrics for this track aren't available yet."
+            : "Connect Spotify and play music to see lyrics.";
+
+    private void NotifyEmptyStateText()
+    {
+        OnPropertyChanged(nameof(EmptyStateTitle));
+        OnPropertyChanged(nameof(EmptyStateSubtitle));
+    }
 
     public bool IsInstrumental
     {
@@ -447,6 +468,9 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
 
     public event Action<int>? ActiveLineChanged;
 
+    /// <summary>Raised after a new lyrics payload replaces the line collection, so views can reset their scroll position.</summary>
+    public event Action? LyricsReloaded;
+
     public LyricsViewModel(
         SignalRPlaybackClient client,
         ThemeManager? themeManager = null,
@@ -580,7 +604,39 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
 
     private void OnPaletteChanged(ColorPalette palette)
     {
+        UpdateAmbientBackground();
         NotifyThemeProperties();
+    }
+
+    private void UpdateAmbientBackground()
+    {
+        string? artworkUrl = _themeManager.AmbientArtworkUrl;
+        if (artworkUrl == _lastAmbientArtworkUrl)
+        {
+            return;
+        }
+
+        _lastAmbientArtworkUrl = artworkUrl;
+
+        if (artworkUrl is null)
+        {
+            _ambientBackgroundSource = null;
+        }
+        else
+        {
+            try
+            {
+                _ambientBackgroundSource = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(artworkUrl));
+            }
+            catch (Exception)
+            {
+                // Headless test environments cannot create XAML bitmaps.
+                _ambientBackgroundSource = null;
+            }
+        }
+
+        OnPropertyChanged(nameof(AmbientBackgroundSource));
+        OnPropertyChanged(nameof(AmbientBackgroundVisibility));
     }
 
     private void NotifyLayoutProperties()
@@ -640,6 +696,7 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
             DeviceName = "No Device";
             VolumePercent = null;
             _themeManager.UpdateTrackMetadata(null, null, null);
+            NotifyEmptyStateText();
             return;
         }
 
@@ -651,6 +708,7 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
         IsPlaying = state.IsPlaying;
         DeviceName = state.DeviceName ?? "Spotify";
         VolumePercent = state.VolumePercent;
+        NotifyEmptyStateText();
         if (!string.IsNullOrEmpty(state.ActiveUserDisplayName))
         {
             ActiveUserName = state.ActiveUserDisplayName;
@@ -740,6 +798,11 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(ResumeAutoScrollVisibility));
         OnPropertyChanged(nameof(HasSyncedLyrics));
         OnPropertyChanged(nameof(HasPlainLyrics));
+
+        // ActiveLineIndex resets to -1 here, and nothing scrolls on a negative
+        // index - so without this event the stage keeps the previous track's
+        // scroll offset (often the bottom) until the first line activates.
+        LyricsReloaded?.Invoke();
     }
 
     private void OnTrackOffsetReceived(TrackOffsetPayload? offset)
@@ -1057,12 +1120,14 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
         CurrentAlbum = string.Empty;
         AlbumArtUrl = null;
         IsPlaying = false;
+        _lastPlaybackState = null;
         _lastLyrics = null;
         LyricLines.Clear();
         HasLyrics = false;
         IsStaticLyricsMode = false;
         ActiveLineIndex = -1;
         _themeManager.UpdateTrackMetadata(null, null, null);
+        NotifyEmptyStateText();
         OnPropertyChanged(nameof(CurrentUserSession));
         OnPropertyChanged(nameof(IsAuthorized));
         OnPropertyChanged(nameof(ConnectButtonText));

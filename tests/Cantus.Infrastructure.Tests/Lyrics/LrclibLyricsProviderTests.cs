@@ -157,4 +157,101 @@ public class LrclibLyricsProviderTests
         SyncedLyrics? result = await provider.GetLyricsAsync(track);
         result.Should().BeNull();
     }
+
+    [Fact]
+    public async Task FetchLyricsAsync_WhenNoMatchAnywhere_ReportsDefinitiveNotFound()
+    {
+        MockHttpMessageHandler mockHandler = new()
+        {
+            ResponseHandler = req =>
+            {
+                if (req.RequestUri!.PathAndQuery.StartsWith("/api/search"))
+                {
+                    return new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new StringContent("[]", Encoding.UTF8, "application/json")
+                    };
+                }
+
+                return new HttpResponseMessage(HttpStatusCode.NotFound);
+            }
+        };
+
+        HttpClient httpClient = new(mockHandler) { BaseAddress = new Uri("https://lrclib.net") };
+        IOptions<LrclibOptions> options = Options.Create(new LrclibOptions());
+        LrclibLyricsProvider provider = new(httpClient, options, NullLogger<LrclibLyricsProvider>.Instance);
+
+        TrackInfo track = new()
+        {
+            Id = "spotify_track_miss",
+            Title = "Nonexistent",
+            Artist = "Ghost Artist",
+            Duration = TimeSpan.FromSeconds(120)
+        };
+
+        LyricsFetchResult result = await provider.FetchLyricsAsync(track);
+
+        result.Lyrics.Should().BeNull();
+        result.IsDefinitive.Should().BeTrue("both endpoints answered without a match");
+    }
+
+    [Fact]
+    public async Task FetchLyricsAsync_WhenLrclibReturnsServerError_ReportsUnavailable()
+    {
+        MockHttpMessageHandler mockHandler = new()
+        {
+            ResponseHandler = _ => new HttpResponseMessage(HttpStatusCode.InternalServerError)
+        };
+
+        HttpClient httpClient = new(mockHandler) { BaseAddress = new Uri("https://lrclib.net") };
+        IOptions<LrclibOptions> options = Options.Create(new LrclibOptions());
+        LrclibLyricsProvider provider = new(httpClient, options, NullLogger<LrclibLyricsProvider>.Instance);
+
+        TrackInfo track = new()
+        {
+            Id = "spotify_track_outage",
+            Title = "Song",
+            Artist = "Artist",
+            Duration = TimeSpan.FromSeconds(180)
+        };
+
+        LyricsFetchResult result = await provider.FetchLyricsAsync(track);
+
+        result.Lyrics.Should().BeNull();
+        result.IsDefinitive.Should().BeFalse("a 5xx is a transient failure, not an authoritative miss");
+    }
+
+    [Fact]
+    public async Task FetchLyricsAsync_WhenSearchFallbackFails_ReportsUnavailable()
+    {
+        MockHttpMessageHandler mockHandler = new()
+        {
+            ResponseHandler = req =>
+            {
+                if (req.RequestUri!.PathAndQuery.StartsWith("/api/get"))
+                {
+                    return new HttpResponseMessage(HttpStatusCode.NotFound);
+                }
+
+                return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
+            }
+        };
+
+        HttpClient httpClient = new(mockHandler) { BaseAddress = new Uri("https://lrclib.net") };
+        IOptions<LrclibOptions> options = Options.Create(new LrclibOptions());
+        LrclibLyricsProvider provider = new(httpClient, options, NullLogger<LrclibLyricsProvider>.Instance);
+
+        TrackInfo track = new()
+        {
+            Id = "spotify_track_search_down",
+            Title = "Song",
+            Artist = "Artist",
+            Duration = TimeSpan.FromSeconds(180)
+        };
+
+        LyricsFetchResult result = await provider.FetchLyricsAsync(track);
+
+        result.Lyrics.Should().BeNull();
+        result.IsDefinitive.Should().BeFalse("the search fallback could not be consulted");
+    }
 }

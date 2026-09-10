@@ -6,7 +6,7 @@ Lyrics retrieval in Cantus is designed for instantaneous local response times an
 
 ## Retrieval Resolution Strategy
 
-When a track starts playing, Cantus traverses a multi-tiered caching pipeline before querying external APIs:
+When a track starts playing, Cantus traverses a multi-tiered caching pipeline, then an ordered chain of lyric providers:
 
 ```mermaid
 flowchart TD
@@ -16,13 +16,24 @@ flowchart TD
     
     QueryLocal -->|Cache Miss| QueryLRCLIB[2. Query LRCLIB Synced API]
     
-    QueryLRCLIB -->|Exact Match Found| SavePositive[3. Save to SQLite Positive Cache]
-    QueryLRCLIB -->|Fuzzy Match Found| SavePositive
-    QueryLRCLIB -->|No Synced Lyrics / Instrumental| SaveNegative[4. Save Negative Cache: 30-Day TTL]
+    QueryLRCLIB -->|Match Found| SavePositive[4. Save to SQLite Positive Cache]
+    QueryLRCLIB -->|Miss| QueryNetease[3. Query NetEase Fallback]
+    QueryNetease -->|Match Found| SavePositive
+    QueryNetease -->|All Providers Answered: Not Found| SaveNegative[5. Save Negative Cache]
+    QueryNetease -->|Any Provider Unreachable| SkipCache[No Cache Entry: Retry Next Poll]
     
     SavePositive --> ReturnLyrics
     SaveNegative --> ReturnInstrumental
 ```
+
+### Provider Fallback Chain
+
+Lyric sources implement `ILyricsFetchProvider` and run in a configured order (`CachedLyricsService` walks the list):
+
+1. **LRCLIB** (always first): community-driven, key-free synced and plain lyrics.
+2. **NetEase Cloud Music** (optional fallback, `Netease:Enabled` in `appsettings.json`, on by default): unofficial web API with strong catalog coverage; synced lyrics only. CJK credit lines (lyricist/composer metadata) are stripped before parsing, and payload-level error codes (rate limits, anti-scraping challenges) are treated as transient failures.
+
+Every provider classifies its result as *found*, *authoritative miss*, or *transiently unavailable*. The negative cache is only written when **every** provider authoritatively missed — an unreachable provider (network error, 5xx, or NetEase payload error code) leaves the cache untouched so the next playback poll retries.
 
 ---
 
@@ -35,7 +46,7 @@ flowchart TD
 
 ### 2. Negative Caching for Instrumental Tracks
 - **Problem**: Many classical, jazz, EDM, and post-rock tracks have no lyrics. Without caching this absence, the server would query LRCLIB on every track transition.
-- **Solution**: Cantus records a **Negative Cache** entry with a configurable 30-day TTL (configured via `Lrclib:NegativeCacheDays`, default 30 days in `appsettings.json`, 7-day code fallback). When the track plays again, Cantus immediately recognizes it as instrumental without network queries.
+- **Solution**: Cantus records a **Negative Cache** entry with a configurable 30-day TTL (configured via `LyricsCache:NegativeCacheDays` in `appsettings.json`; the setting is provider-agnostic and applies to the whole fallback chain). When the track plays again, Cantus immediately recognizes it as instrumental without network queries. A negative entry is only written when every provider in the chain authoritatively reported "not found" — transient provider failures are never cached.
 
 ### 3. LRCLIB Integration & Fuzzy Matching
 - **Primary Query**: Exact search by Track Name, Artist Name, Album Name, and Duration.

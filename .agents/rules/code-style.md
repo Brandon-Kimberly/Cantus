@@ -88,7 +88,7 @@ Adhere to the following conventions when authoring, modifying, or refactoring C#
 
 ## 7. Naming, Modifiers & Qualification
 - **Private Fields**: Prefix private and internal instance fields with an underscore and use `_camelCase` (e.g. `private readonly ILyricsProvider _lyricsProvider;`).
-- **Constants**: Constants (`const`) must use `CAPS_CASE` / `SCREAMING_SNAKE_CASE` (e.g. `public const string SECTION_NAME = "Spotify";`, `private const int MAX_NTP_SAMPLES = 5;`).
+- **Constants & Magic Numbers**: Constants (`const`) must use `CAPS_CASE` / `SCREAMING_SNAKE_CASE` (e.g. `public const string SECTION_NAME = "Spotify";`, `private const int MAX_NTP_SAMPLES = 5;`). Avoid magic numbers throughout the codebase unless the meaning is immediately obvious from its context (e.g., standard math or index boundaries like `0`, `1`, or basic doubling/halving). Any non-obvious numeric values—including algorithmic weights, lightness/saturation thresholds, opacity/alpha values, bit shifts, buffer sizes, timeouts, and scaling factors—must be declared as descriptive, all-caps `const` fields.
 - **No `this.` Qualifier**: Avoid `this.` or `Me.` qualification unless strictly necessary to disambiguate shadowed identifiers.
 - **Explicit Accessibility**: Always explicitly declare accessibility modifiers (`private`, `public`, `protected`, `internal`) on all types and members.
 - **`readonly` Modifier**: Apply `readonly` to all fields and properties that are assigned only during declaration or in the constructor.

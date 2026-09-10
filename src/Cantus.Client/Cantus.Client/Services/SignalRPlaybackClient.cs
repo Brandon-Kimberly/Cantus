@@ -252,6 +252,19 @@ public sealed class SignalRPlaybackClient : ISignalRPlaybackClient
     {
         _configuredServerUrl = serverUrl;
         SessionToken = sessionToken ?? LoadPersistedSessionToken();
+
+        // Web session handoff: a ?auth=<session-id> query parameter (the same value the
+        // OAuth callback deep-links to the desktop client) authenticates this browser
+        // without re-running OAuth - e.g. opening the app on a phone or second device.
+        // EnsureConnectionBuilt strips the parameter from the URL before connecting.
+        if (string.IsNullOrWhiteSpace(SessionToken))
+        {
+            string authQueryToken = WasmInterop.GetAuthQueryParameter();
+            if (!string.IsNullOrWhiteSpace(authQueryToken))
+            {
+                SessionToken = authQueryToken;
+            }
+        }
         if (reconnectInterval.HasValue)
         {
             ReconnectInterval = reconnectInterval.Value;
