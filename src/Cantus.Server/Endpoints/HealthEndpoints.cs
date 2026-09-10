@@ -1,6 +1,6 @@
-using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using Cantus.Core.Models;
 using Cantus.Infrastructure.Persistence;
 using Cantus.Server.Services;
 using Microsoft.AspNetCore.Builder;
@@ -36,14 +36,16 @@ public static class HealthEndpoints
             dbCanConnect = false;
         }
 
-        string version = typeof(HealthEndpoints).Assembly.GetName().Version?.ToString(3) ?? "1.0.0";
+        string version = BuildInfo.SemVer;
+        string commitSha = BuildInfo.CommitSha;
         int activeSessions = sessionRegistry.GetAllSnapshots().Count;
 
         HealthResponseDto response = new(
             Status: dbCanConnect ? "Healthy" : "Degraded",
             Version: version,
             ActiveSessions: activeSessions,
-            Database: dbCanConnect ? "Connected" : "Disconnected"
+            Database: dbCanConnect ? "Connected" : "Disconnected",
+            CommitSha: commitSha
         );
 
         return dbCanConnect
@@ -56,4 +58,5 @@ public sealed record HealthResponseDto(
     string Status,
     string Version,
     int ActiveSessions,
-    string Database);
+    string Database,
+    string? CommitSha = null);
