@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Cantus.Client.Models;
+using Microsoft.Extensions.Logging;
 using Microsoft.UI.Xaml.Media;
 using Windows.UI;
 
@@ -12,6 +13,7 @@ namespace Cantus.Client.Services;
 
 public sealed class ThemeManager : INotifyPropertyChanged
 {
+    private static readonly ILogger<ThemeManager> _logger = ClientLoggingManager.CreateLogger<ThemeManager>();
     private static ThemeManager? _instance;
     public static ThemeManager Instance => _instance ??= new ThemeManager();
 
@@ -308,7 +310,7 @@ public sealed class ThemeManager : INotifyPropertyChanged
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[ThemeManager] Dynamic palette extraction failed: {ex.Message}");
+            _logger.LogError(ex, "Dynamic palette extraction failed");
         }
         finally
         {

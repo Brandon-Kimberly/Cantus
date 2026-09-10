@@ -5,6 +5,7 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Cantus.Client.Models;
+using Microsoft.Extensions.Logging;
 using StbImageSharp;
 
 namespace Cantus.Client.Services;
@@ -24,6 +25,7 @@ public sealed class AlbumArtColorService
     public static AlbumArtColorService Instance => _instance ??= new AlbumArtColorService();
 
     private readonly HttpClient _httpClient;
+    private readonly ILogger<AlbumArtColorService> _logger;
     private readonly object _cacheLock = new();
     private readonly Dictionary<string, IReadOnlyList<ColorSwatch>> _cachedSwatchesByUrl = new();
     private readonly Queue<string> _cacheEvictionOrder = new();
@@ -34,8 +36,14 @@ public sealed class AlbumArtColorService
     }
 
     public AlbumArtColorService(HttpClient httpClient)
+        : this(httpClient, ClientLoggingManager.CreateLogger<AlbumArtColorService>())
+    {
+    }
+
+    public AlbumArtColorService(HttpClient httpClient, ILogger<AlbumArtColorService> logger)
     {
         _httpClient = httpClient;
+        _logger = logger;
     }
 
     public bool TryGetCachedSwatches(string? albumArtUrl, [NotNullWhen(true)] out IReadOnlyList<ColorSwatch>? swatches)
@@ -77,13 +85,19 @@ public sealed class AlbumArtColorService
 
             if (!response.IsSuccessStatusCode)
             {
-                Console.WriteLine($"[AlbumArtColorService] Album art request returned {(int)response.StatusCode} for {albumArtUrl}");
+                _logger.LogWarning(
+                    "Album art request returned {StatusCode} for {AlbumArtUrl}",
+                    (int)response.StatusCode,
+                    albumArtUrl);
                 return null;
             }
 
             if (response.Content.Headers.ContentLength is long contentLength && contentLength > MAX_IMAGE_BYTES)
             {
-                Console.WriteLine($"[AlbumArtColorService] Album art exceeds {MAX_IMAGE_BYTES} bytes: {albumArtUrl}");
+                _logger.LogWarning(
+                    "Album art exceeds {MaxBytes} bytes: {AlbumArtUrl}",
+                    MAX_IMAGE_BYTES,
+                    albumArtUrl);
                 return null;
             }
 
@@ -114,7 +128,10 @@ public sealed class AlbumArtColorService
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[AlbumArtColorService] Failed to extract colors from {albumArtUrl}: {ex.Message}");
+            _logger.LogError(
+                ex,
+                "Failed to extract colors from {AlbumArtUrl}",
+                albumArtUrl);
             return null;
         }
     }

@@ -699,5 +699,178 @@ public sealed class LyricsViewModelTests
         // Assert
         vm.AutoScrollToggleVisibility.Should().Be(Visibility.Collapsed);
     }
+
+    [Fact]
+    public void PausedState_AppliesLatencyCompensationExactly()
+    {
+        // Arrange - paused position math has no wall-clock term, so it is exact
+        SignalRPlaybackClient client = new();
+        LyricsViewModel vm = new(client);
+        vm.LatencyCompensationMs = 200;
+
+        // Act
+        client.RaisePlaybackStateReceived(new PlaybackStatePayload
+        {
+            CurrentTrack = new TrackInfoPayload { Id = "t1", Title = "Song", Artist = "Artist", DurationMs = 240000 },
+            ProgressMs = 60000,
+            IsPlaying = false,
+            TimestampUtc = DateTimeOffset.UtcNow
+        });
+
+        // Assert
+        vm.InterpolatedProgressMs.Should().Be(59800);
+    }
+
+    [Fact]
+    public void LatencyCompensation_ZeroRemovesTheShiftEntirely()
+    {
+        // Arrange
+        SignalRPlaybackClient client = new();
+        LyricsViewModel vm = new(client);
+        vm.LatencyCompensationMs = 0;
+
+        // Act
+        client.RaisePlaybackStateReceived(new PlaybackStatePayload
+        {
+            CurrentTrack = new TrackInfoPayload { Id = "t1", Title = "Song", Artist = "Artist", DurationMs = 240000 },
+            ProgressMs = 60000,
+            IsPlaying = false,
+            TimestampUtc = DateTimeOffset.UtcNow
+        });
+
+        // Assert
+        vm.InterpolatedProgressMs.Should().Be(60000);
+    }
+
+    [Fact]
+    public void AdjustLatencyCompensation_ClampsAndUpdatesCalibrationText()
+    {
+        // Arrange
+        SignalRPlaybackClient client = new();
+        LyricsViewModel vm = new(client);
+        vm.LatencyCompensationMs = 200;
+
+        // Act & Assert - steps, clamping at both bounds, and the display text
+        vm.AdjustLatencyCompensation(-50);
+        vm.LatencyCompensationMs.Should().Be(150);
+        vm.CalibrationText.Should().Be("150 ms");
+
+        vm.AdjustLatencyCompensation(-5000);
+        vm.LatencyCompensationMs.Should().Be(0);
+
+        vm.AdjustLatencyCompensation(5000);
+        vm.LatencyCompensationMs.Should().Be(1000);
+        vm.CalibrationText.Should().Be("1000 ms");
+    }
+
+    [Fact]
+    public void PlayingState_CompensationShiftsAnchorByItsValue()
+    {
+        // Arrange - two view models differing only in compensation; comparing
+        // them cancels the wall-clock elapsed term
+        PlaybackStatePayload state = new()
+        {
+            CurrentTrack = new TrackInfoPayload { Id = "t1", Title = "Song", Artist = "Artist", DurationMs = 240000 },
+            ProgressMs = 60000,
+            IsPlaying = true,
+            TimestampUtc = DateTimeOffset.UtcNow
+        };
+
+        SignalRPlaybackClient clientA = new();
+        LyricsViewModel vmA = new(clientA);
+        vmA.LatencyCompensationMs = 0;
+
+        SignalRPlaybackClient clientB = new();
+        LyricsViewModel vmB = new(clientB);
+        vmB.LatencyCompensationMs = 200;
+
+        // Act
+        clientA.RaisePlaybackStateReceived(state);
+        clientB.RaisePlaybackStateReceived(state);
+
+        // Assert
+        long delta = vmA.InterpolatedProgressMs - vmB.InterpolatedProgressMs;
+        delta.Should().BeInRange(150, 250);
+    }
+
+    [Fact]
+    public void InstrumentalBreakVisibility_RequiresBreakWithSyncedLiveLyrics()
+    {
+        // Arrange - synced lyrics loaded
+        SignalRPlaybackClient client = new();
+        LyricsViewModel vm = new(client);
+        client.RaiseLyricsReceived(new LyricsPayload
+        {
+            TrackId = "t1",
+            Title = "Song",
+            Artist = "Artist",
+            IsSynced = true,
+            Lines = new List<LyricLinePayload>
+            {
+                new() { TimestampMs = 1000, Text = "first" },
+                new() { TimestampMs = 20000, Text = "after the solo" }
+            }
+        });
+        vm.InstrumentalBreakVisibility.Should().Be(Visibility.Collapsed);
+
+        // Act - the tick loop flags a break
+        vm.IsInstrumentalBreak = true;
+        vm.InstrumentalBreakText = "♪ Instrumental Interlude (12s) ♪";
+
+        // Assert
+        vm.InstrumentalBreakVisibility.Should().Be(Visibility.Visible);
+
+        // Act & Assert - static mode hides the indicator even mid-break
+        vm.ToggleStaticLyricsMode();
+        vm.InstrumentalBreakVisibility.Should().Be(Visibility.Collapsed);
+        vm.ToggleStaticLyricsMode();
+        vm.InstrumentalBreakVisibility.Should().Be(Visibility.Visible);
+
+        // Act & Assert - break ends
+        vm.IsInstrumentalBreak = false;
+        vm.InstrumentalBreakVisibility.Should().Be(Visibility.Collapsed);
+    }
+
+    [Fact]
+    public void InstrumentalBreakVisibility_NotifiesOnEveryDependency()
+    {
+        // Arrange - the pill binds this property; every dependency change must
+        // notify it or the indicator strands (same class of bug as the karaoke
+        // toggle's missing notification)
+        SignalRPlaybackClient client = new();
+        LyricsViewModel vm = new(client);
+        client.RaiseLyricsReceived(new LyricsPayload
+        {
+            TrackId = "t1",
+            Title = "Song",
+            Artist = "Artist",
+            IsSynced = true,
+            Lines = new List<LyricLinePayload> { new() { TimestampMs = 1000, Text = "line" } }
+        });
+
+        List<string> notified = new();
+        vm.PropertyChanged += (s, e) => notified.Add(e.PropertyName ?? string.Empty);
+
+        // Act & Assert - break flag flips
+        vm.IsInstrumentalBreak = true;
+        notified.Should().Contain(nameof(LyricsViewModel.InstrumentalBreakVisibility));
+
+        // Act & Assert - static mode toggles
+        notified.Clear();
+        vm.ToggleStaticLyricsMode();
+        notified.Should().Contain(nameof(LyricsViewModel.InstrumentalBreakVisibility));
+
+        // Act & Assert - lyrics reload
+        notified.Clear();
+        client.RaiseLyricsReceived(new LyricsPayload
+        {
+            TrackId = "t2",
+            Title = "Next",
+            Artist = "Artist",
+            IsSynced = true,
+            Lines = new List<LyricLinePayload> { new() { TimestampMs = 500, Text = "another" } }
+        });
+        notified.Should().Contain(nameof(LyricsViewModel.InstrumentalBreakVisibility));
+    }
 }
 

@@ -2,6 +2,7 @@ using System;
 using Cantus.Client.Models;
 using Cantus.Client.Services;
 using Cantus.Client.ViewModels;
+using Microsoft.Extensions.Logging;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 
@@ -9,6 +10,7 @@ namespace Cantus.Client.Views;
 
 public sealed partial class MobileSettingsView : UserControl
 {
+    private static readonly ILogger<MobileSettingsView> _logger = ClientLoggingManager.CreateLogger<MobileSettingsView>();
     public static readonly DependencyProperty ViewModelProperty =
         DependencyProperty.Register(
             nameof(ViewModel),
@@ -57,6 +59,16 @@ public sealed partial class MobileSettingsView : UserControl
         if (ViewModel is not null) await ViewModel.NudgeOffsetAsync(500);
     }
 
+    private void OnLatencyMinusClicked(object sender, RoutedEventArgs e)
+    {
+        ViewModel?.AdjustLatencyCompensation(-50);
+    }
+
+    private void OnLatencyPlusClicked(object sender, RoutedEventArgs e)
+    {
+        ViewModel?.AdjustLatencyCompensation(50);
+    }
+
     private async void OnConnectSpotifyClicked(object sender, RoutedEventArgs e)
     {
         try
@@ -77,7 +89,7 @@ public sealed partial class MobileSettingsView : UserControl
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[MobileSettingsView] Error connecting to Spotify: {ex}");
+            _logger.LogError(ex, "Error connecting to Spotify");
         }
     }
 
