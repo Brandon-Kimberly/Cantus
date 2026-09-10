@@ -8,18 +8,18 @@ namespace Cantus.Infrastructure.Lyrics;
 public sealed class CachedLyricsService : ILyricsProvider
 {
     private readonly ILyricsCacheRepository _cacheRepository;
-    private readonly LrclibLyricsProvider _lrclibProvider;
-    private readonly LrclibOptions _options;
+    private readonly IReadOnlyList<ILyricsFetchProvider> _providers;
+    private readonly LyricsCacheOptions _options;
     private readonly ILogger<CachedLyricsService> _logger;
 
     public CachedLyricsService(
         ILyricsCacheRepository cacheRepository,
-        LrclibLyricsProvider lrclibProvider,
-        IOptions<LrclibOptions> options,
+        IReadOnlyList<ILyricsFetchProvider> providers,
+        IOptions<LyricsCacheOptions> options,
         ILogger<CachedLyricsService> logger)
     {
         _cacheRepository = cacheRepository;
-        _lrclibProvider = lrclibProvider;
+        _providers = providers;
         _options = options.Value;
         _logger = logger;
     }
@@ -51,19 +51,70 @@ public sealed class CachedLyricsService : ILyricsProvider
             return cached;
         }
 
-        // 3. Query LRCLIB
+        // 3. Query the provider chain in order until one finds lyrics
         _logger.LogInformation(
-            "Cache miss for track {TrackId} ({Artist} - {Title}). Fetching from LRCLIB...",
+            "Cache miss for track {TrackId} ({Artist} - {Title}). Querying {ProviderCount} lyrics providers...",
             track.Id,
             track.Artist,
-            track.Title);
+            track.Title,
+            _providers.Count);
 
-        SyncedLyrics? freshLyrics = await _lrclibProvider.GetLyricsAsync(track, cancellationToken);
+        bool allProvidersDefinitive = true;
 
-        if (freshLyrics is not null)
+        foreach (ILyricsFetchProvider provider in _providers)
         {
-            await _cacheRepository.SaveLyricsAsync(freshLyrics, cancellationToken: cancellationToken);
-            return freshLyrics;
+            LyricsFetchResult fetchResult;
+            try
+            {
+                fetchResult = await provider.FetchLyricsAsync(track, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                // A provider must never take down the chain: treat an
+                // unexpected throw as that provider being unavailable.
+                _logger.LogWarning(
+                    ex,
+                    "Lyrics provider {Provider} threw for track {TrackId}; treating as unavailable.",
+                    provider.ProviderName,
+                    track.Id);
+                allProvidersDefinitive = false;
+                continue;
+            }
+
+            if (fetchResult.Lyrics is not null)
+            {
+                _logger.LogInformation(
+                    "Lyrics for track {TrackId} ({Artist} - {Title}) found via {Provider}",
+                    track.Id,
+                    track.Artist,
+                    track.Title,
+                    provider.ProviderName);
+                await _cacheRepository.SaveLyricsAsync(fetchResult.Lyrics, cancellationToken: cancellationToken);
+                return fetchResult.Lyrics;
+            }
+
+            if (!fetchResult.IsDefinitive)
+            {
+                allProvidersDefinitive = false;
+            }
+        }
+
+        // A transient failure anywhere in the chain must not be
+        // negative-cached: a provider that was unreachable might have the
+        // lyrics, and the entry would mark the track "not found" for the full
+        // TTL. Leaving the cache untouched lets the next poll retry.
+        if (!allProvidersDefinitive)
+        {
+            _logger.LogWarning(
+                "One or more lyrics providers were unavailable for track {TrackId} ({Artist} - {Title}); skipping negative cache so it can be retried.",
+                track.Id,
+                track.Artist,
+                track.Title);
+            return null;
         }
 
         // 4. Mark not found with TTL
