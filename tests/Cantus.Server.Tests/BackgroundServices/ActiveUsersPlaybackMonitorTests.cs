@@ -7,6 +7,7 @@ using Cantus.Server.Services;
 using FluentAssertions;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -73,12 +74,54 @@ public sealed class ActiveUsersPlaybackMonitorTests
             NullLogger<ActiveUsersPlaybackMonitor>.Instance);
     }
 
+    // The monitor is a background loop, so these tests used to sleep a fixed
+    // interval and hope an iteration had completed. On a loaded CI runner it
+    // sometimes had not, producing failures unrelated to the code under test.
+    // Each test now waits for the specific broadcast it asserts on.
+    private const int SIGNAL_TIMEOUT_MS = 10_000;
+    private const int SAFETY_STOP_TIMEOUT_MS = 30_000;
+
+    private static TaskCompletionSource CreateSignal()
+        => new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    /// <summary>
+    /// Runs <paramref name="monitor"/> until every signal fires, then stops it.
+    /// Waiting on the signal means a fast machine finishes immediately and a
+    /// slow one still succeeds, while a genuine regression fails with a named
+    /// timeout instead of a bare "invocation never performed".
+    /// </summary>
+    private static async Task RunUntilAsync(
+        IHostedService monitor,
+        string description,
+        params Task[] signals)
+    {
+        using CancellationTokenSource safety = new(SAFETY_STOP_TIMEOUT_MS);
+        await monitor.StartAsync(safety.Token);
+
+        try
+        {
+            await Task.WhenAll(signals).WaitAsync(TimeSpan.FromMilliseconds(SIGNAL_TIMEOUT_MS));
+        }
+        catch (TimeoutException)
+        {
+            throw new TimeoutException(
+                $"Timed out after {SIGNAL_TIMEOUT_MS}ms waiting for {description}.");
+        }
+        finally
+        {
+            await monitor.StopAsync(CancellationToken.None);
+        }
+    }
+
     [Fact]
     public async Task WhenNoConnectedClients_DoesNotPollSpotify()
     {
         _mockRegistry.Setup(r => r.HasConnectedClients).Returns(false);
         _mockRegistry.Setup(r => r.GetActiveUserIdsWithConnectedClients()).Returns(new HashSet<string>());
 
+        // A fixed wait is correct here: this asserts an absence, so there is
+        // no signal to wait for - the delay only has to be long enough that a
+        // poll would have happened if the guard were broken.
         using CancellationTokenSource cts = new(100);
         await _monitor.StartAsync(cts.Token);
         await Task.Delay(50);
@@ -138,10 +181,13 @@ public sealed class ActiveUsersPlaybackMonitorTests
         _mockLyricsProvider.Setup(l => l.GetLyricsAsync(track, It.IsAny<CancellationToken>()))
             .ReturnsAsync(lyrics);
 
-        using CancellationTokenSource cts = new(200);
-        await _monitor.StartAsync(cts.Token);
-        await Task.Delay(100);
-        await _monitor.StopAsync(CancellationToken.None);
+        TaskCompletionSource stateBroadcast = CreateSignal();
+        _mockUser1Group
+            .Setup(c => c.ReceivePlaybackState(It.IsAny<PlaybackStateDto>()))
+            .Callback(() => stateBroadcast.TrySetResult())
+            .Returns(Task.CompletedTask);
+
+        await RunUntilAsync(_monitor, "a playback-state broadcast to user-1", stateBroadcast.Task);
 
         _mockLyricsProvider.Verify(l => l.GetLyricsAsync(track, It.IsAny<CancellationToken>()), Times.AtLeastOnce);
         _mockUser1Group.Verify(c => c.ReceiveLyrics(It.IsAny<LyricsDto>()), Times.AtLeastOnce);
@@ -216,10 +262,24 @@ public sealed class ActiveUsersPlaybackMonitorTests
                 Lines = []
             });
 
-        using CancellationTokenSource cts = new(200);
-        await _monitor.StartAsync(cts.Token);
-        await Task.Delay(100);
-        await _monitor.StopAsync(CancellationToken.None);
+        TaskCompletionSource user1Broadcast = CreateSignal();
+        TaskCompletionSource user2Broadcast = CreateSignal();
+        _mockUser1Group
+            .Setup(c => c.ReceivePlaybackState(
+                It.Is<PlaybackStateDto>(p => p.CurrentTrack != null && p.CurrentTrack.Title == "Song 1")))
+            .Callback(() => user1Broadcast.TrySetResult())
+            .Returns(Task.CompletedTask);
+        _mockUser2Group
+            .Setup(c => c.ReceivePlaybackState(
+                It.Is<PlaybackStateDto>(p => p.CurrentTrack != null && p.CurrentTrack.Title == "Song 2")))
+            .Callback(() => user2Broadcast.TrySetResult())
+            .Returns(Task.CompletedTask);
+
+        await RunUntilAsync(
+            _monitor,
+            "both per-user playback-state broadcasts",
+            user1Broadcast.Task,
+            user2Broadcast.Task);
 
         _mockUser1Group.Verify(
             c => c.ReceivePlaybackState(
@@ -263,10 +323,19 @@ public sealed class ActiveUsersPlaybackMonitorTests
         _mockLyricsProvider.Setup(l => l.GetLyricsAsync(track, It.IsAny<CancellationToken>()))
             .ReturnsAsync((SyncedLyrics?)null);
 
-        using CancellationTokenSource cts = new(150);
-        await _monitor.StartAsync(cts.Token);
-        await Task.Delay(80);
-        await _monitor.StopAsync(CancellationToken.None);
+        TaskCompletionSource emptyLyricsBroadcast = CreateSignal();
+        _mockUser1Group
+            .Setup(c => c.ReceiveLyrics(It.Is<LyricsDto>(l =>
+                l.TrackId == "instrumental-1" &&
+                l.Title == "Instrumental Track" &&
+                l.Lines.Count == 0)))
+            .Callback(() => emptyLyricsBroadcast.TrySetResult())
+            .Returns(Task.CompletedTask);
+
+        await RunUntilAsync(
+            _monitor,
+            "the empty-lyrics broadcast for the instrumental track",
+            emptyLyricsBroadcast.Task);
 
         _mockUser1Group.Verify(
             c => c.ReceiveLyrics(It.Is<LyricsDto>(l =>
@@ -306,10 +375,14 @@ public sealed class ActiveUsersPlaybackMonitorTests
         _mockSpotifyClient.Setup(s => s.GetCurrentPlaybackAsync("tok-1", It.IsAny<CancellationToken>()))
             .ThrowsAsync(rateLimitException);
 
-        using CancellationTokenSource cts = new(250);
-        await _monitor.StartAsync(cts.Token);
-        await Task.Delay(150);
-        await _monitor.StopAsync(CancellationToken.None);
+        TaskCompletionSource rateLimitedDiagnostics = CreateSignal();
+        _mockUser1Group
+            .Setup(c => c.ReceiveDiagnostics(It.Is<DiagnosticsDto>(d =>
+                d.PollerStatus.StartsWith("Rate Limited"))))
+            .Callback(() => rateLimitedDiagnostics.TrySetResult())
+            .Returns(Task.CompletedTask);
+
+        await RunUntilAsync(_monitor, "the rate-limited diagnostics broadcast", rateLimitedDiagnostics.Task);
 
         _monitor.IsRateLimited.Should().BeTrue();
         _monitor.RateLimitUntilUtc.Should().BeAfter(DateTimeOffset.UtcNow);
@@ -381,10 +454,15 @@ public sealed class ActiveUsersPlaybackMonitorTests
             customOptions,
             NullLogger<ActiveUsersPlaybackMonitor>.Instance);
 
-        using CancellationTokenSource cts = new(150);
-        await customMonitor.StartAsync(cts.Token);
-        await Task.Delay(80);
-        await customMonitor.StopAsync(CancellationToken.None);
+        TaskCompletionSource imminentEndDiagnostics = CreateSignal();
+        _mockUser1Group
+            .Setup(c => c.ReceiveDiagnostics(It.Is<DiagnosticsDto>(d =>
+                d.ActivePollIntervalMs == 1234 &&
+                d.PollerStatus == "Active (Playing)")))
+            .Callback(() => imminentEndDiagnostics.TrySetResult())
+            .Returns(Task.CompletedTask);
+
+        await RunUntilAsync(customMonitor, "the imminent-end diagnostics broadcast", imminentEndDiagnostics.Task);
 
         _mockUser1Group.Verify(
             c => c.ReceiveDiagnostics(It.Is<DiagnosticsDto>(d =>
@@ -446,10 +524,15 @@ public sealed class ActiveUsersPlaybackMonitorTests
             customOptions,
             NullLogger<ActiveUsersPlaybackMonitor>.Instance);
 
-        using CancellationTokenSource cts = new(150);
-        await customMonitor.StartAsync(cts.Token);
-        await Task.Delay(80);
-        await customMonitor.StopAsync(CancellationToken.None);
+        TaskCompletionSource backgroundDiagnostics = CreateSignal();
+        _mockUser1Group
+            .Setup(c => c.ReceiveDiagnostics(It.Is<DiagnosticsDto>(d =>
+                d.ActivePollIntervalMs == 8888 &&
+                d.PollerStatus == "Active (Background)")))
+            .Callback(() => backgroundDiagnostics.TrySetResult())
+            .Returns(Task.CompletedTask);
+
+        await RunUntilAsync(customMonitor, "the background-interval diagnostics broadcast", backgroundDiagnostics.Task);
 
         _mockUser1Group.Verify(
             c => c.ReceiveDiagnostics(It.Is<DiagnosticsDto>(d =>
