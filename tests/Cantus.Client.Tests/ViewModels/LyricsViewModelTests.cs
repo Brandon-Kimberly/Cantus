@@ -1046,5 +1046,24 @@ public sealed class LyricsViewModelTests
         vm.ThemeToastStageVisibility.Should().Be(Visibility.Collapsed);
         vm.ThemeToastPageVisibility.Should().Be(Visibility.Collapsed);
     }
+
+    [Fact]
+    public void ThemeChange_RaisesPropertyChanged_ForShuffleAndRepeatForegrounds()
+    {
+        // Arrange
+        SignalRPlaybackClient client = new();
+        ThemeManager themeManager = new();
+        LyricsViewModel vm = new(client, themeManager, new ResponsiveLayoutManager());
+
+        List<string> notified = new();
+        vm.PropertyChanged += (s, e) => notified.Add(e.PropertyName ?? string.Empty);
+
+        // Act
+        themeManager.SetThemeMode(ThemeMode.EmeraldSynth);
+
+        // Assert
+        notified.Should().Contain(nameof(LyricsViewModel.ShuffleButtonForeground));
+        notified.Should().Contain(nameof(LyricsViewModel.RepeatButtonForeground));
+    }
 }
 

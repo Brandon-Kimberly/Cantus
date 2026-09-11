@@ -1015,6 +1015,8 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(ActivePrimaryAccentColor));
         OnPropertyChanged(nameof(ActiveBackgroundColor));
         OnPropertyChanged(nameof(Theme));
+        OnPropertyChanged(nameof(ShuffleButtonForeground));
+        OnPropertyChanged(nameof(RepeatButtonForeground));
     }
 
     public void RefreshLyricLineSizes()
