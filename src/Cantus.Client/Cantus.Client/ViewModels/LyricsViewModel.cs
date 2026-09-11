@@ -76,6 +76,10 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
     private bool _isUserScrollingPaused;
     private Microsoft.UI.Xaml.Media.ImageSource? _ambientBackgroundSource;
     private string? _lastAmbientArtworkUrl;
+    private const int THEME_TOAST_DURATION_MS = 2000;
+    private readonly DispatcherTimer _themeToastTimer;
+    private string _themeToastText = string.Empty;
+    private bool _isThemeToastVisible;
 
     public ObservableCollection<LyricLineViewModel> LyricLines { get; } = new();
     public ObservableCollection<AuthorizedSessionPayload> Sessions { get; } = new();
@@ -124,6 +128,20 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
     public string CommitSha => BuildInfo.CommitSha;
 
     public string AppVersionDisplay => $"Cantus v{BuildInfo.Version}";
+    public string ThemeToastText => _themeToastText;
+
+    // On Small the toast overlays the page top (the lyrics stage may be hidden behind
+    // another mobile tab); on wider layouts it renders inside the lyrics stage's top
+    // row so it sits in the empty space above the lyrics, centered with them.
+    public Visibility ThemeToastPageVisibility =>
+        _isThemeToastVisible && _layoutManager.CurrentBreakpoint == LayoutBreakpoint.Small
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+
+    public Visibility ThemeToastStageVisibility =>
+        _isThemeToastVisible && _layoutManager.CurrentBreakpoint != LayoutBreakpoint.Small
+            ? Visibility.Visible
+            : Visibility.Collapsed;
 
     public string ConnectionStatus
     {
@@ -641,6 +659,7 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
         _layoutManager.LayoutChanged += OnLayoutManagerChanged;
         _layoutManager.BreakpointChanged += OnLayoutBreakpointChanged;
         _themeManager.PaletteChanged += OnPaletteChanged;
+        _themeManager.PropertyChanged += OnThemeManagerPropertyChanged;
 
         LyricLines.CollectionChanged += OnLyricLinesCollectionChanged;
 
@@ -665,6 +684,11 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
             Interval = TimeSpan.FromMilliseconds(TRANSPORT_STATUS_DURATION_MS)
         };
         _transportStatusTimer.Tick += (s, e) => HideTransportStatus();
+        _themeToastTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(THEME_TOAST_DURATION_MS)
+        };
+        _themeToastTimer.Tick += (s, e) => HideThemeToast();
     }
 
     public string ClientId => _client.ClientId;
@@ -794,8 +818,44 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(AmbientBackgroundVisibility));
     }
 
+    private void OnThemeManagerPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ThemeManager.CurrentMode))
+        {
+            ShowThemeToast(_themeManager.CurrentMode);
+        }
+    }
+
+    private void ShowThemeToast(ThemeMode mode)
+    {
+        _themeToastText = mode.GetDisplayName();
+        _isThemeToastVisible = true;
+        OnPropertyChanged(nameof(ThemeToastText));
+        NotifyThemeToastVisibilities();
+
+        _themeToastTimer.Stop();
+        _themeToastTimer.Start();
+    }
+
+    internal void HideThemeToast()
+    {
+        _themeToastTimer.Stop();
+        if (_isThemeToastVisible)
+        {
+            _isThemeToastVisible = false;
+            NotifyThemeToastVisibilities();
+        }
+    }
+
+    private void NotifyThemeToastVisibilities()
+    {
+        OnPropertyChanged(nameof(ThemeToastPageVisibility));
+        OnPropertyChanged(nameof(ThemeToastStageVisibility));
+    }
+
     private void NotifyLayoutProperties()
     {
+        NotifyThemeToastVisibilities();
         OnPropertyChanged(nameof(CurrentBreakpoint));
         OnPropertyChanged(nameof(MobileView));
         OnPropertyChanged(nameof(SidePanelWidth));

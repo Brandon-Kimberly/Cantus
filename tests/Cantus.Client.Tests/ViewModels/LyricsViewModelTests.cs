@@ -872,5 +872,91 @@ public sealed class LyricsViewModelTests
         });
         notified.Should().Contain(nameof(LyricsViewModel.InstrumentalBreakVisibility));
     }
+
+    [Fact]
+    public void ThemeChange_ShowsToastWithModeDisplayName()
+    {
+        // Arrange - default dimensions classify as Large, so the toast uses the stage placement
+        SignalRPlaybackClient client = new();
+        LyricsViewModel vm = new(client, new ThemeManager(), new ResponsiveLayoutManager());
+        vm.ThemeToastStageVisibility.Should().Be(Visibility.Collapsed);
+        vm.ThemeToastPageVisibility.Should().Be(Visibility.Collapsed);
+
+        // Act
+        vm.SelectedThemeMode = ThemeMode.EmeraldSynth;
+
+        // Assert
+        vm.ThemeToastStageVisibility.Should().Be(Visibility.Visible);
+        vm.ThemeToastPageVisibility.Should().Be(Visibility.Collapsed);
+        vm.ThemeToastText.Should().Be("Emerald Synth");
+    }
+
+    [Fact]
+    public void ThemeChange_OnSmallBreakpoint_ShowsToastAtPageLevel()
+    {
+        // Arrange - mobile-sized viewport
+        SignalRPlaybackClient client = new();
+        ResponsiveLayoutManager layout = new();
+        layout.UpdateDimensions(375, 667);
+        LyricsViewModel vm = new(client, new ThemeManager(), layout);
+
+        // Act
+        vm.SelectedThemeMode = ThemeMode.SolarizedDark;
+
+        // Assert - page overlay on mobile (the lyrics stage may be behind another tab)
+        vm.ThemeToastPageVisibility.Should().Be(Visibility.Visible);
+        vm.ThemeToastStageVisibility.Should().Be(Visibility.Collapsed);
+    }
+
+    [Fact]
+    public void ThemeChange_ViaCycleNextTheme_ShowsToastForEachMode()
+    {
+        // Arrange - default mode is MidnightViolet, so cycling advances to EmeraldSynth
+        SignalRPlaybackClient client = new();
+        LyricsViewModel vm = new(client, new ThemeManager(), new ResponsiveLayoutManager());
+
+        // Act & Assert
+        vm.Theme.CycleNextTheme();
+        vm.ThemeToastText.Should().Be("Emerald Synth");
+
+        vm.Theme.CycleNextTheme();
+        vm.ThemeToastText.Should().Be("Cyberpunk Sunset");
+
+        vm.Theme.SetThemeMode(ThemeMode.Dynamic);
+        vm.ThemeToastText.Should().Be("Dynamic Palette");
+        vm.ThemeToastStageVisibility.Should().Be(Visibility.Visible);
+    }
+
+    [Fact]
+    public void ThemeToast_AfterHide_CollapsesAgain()
+    {
+        // Arrange
+        SignalRPlaybackClient client = new();
+        LyricsViewModel vm = new(client, new ThemeManager(), new ResponsiveLayoutManager());
+        vm.SelectedThemeMode = ThemeMode.NordicSlate;
+        vm.ThemeToastStageVisibility.Should().Be(Visibility.Visible);
+
+        // Act - the auto-hide timer invokes this on expiry
+        vm.HideThemeToast();
+
+        // Assert
+        vm.ThemeToastStageVisibility.Should().Be(Visibility.Collapsed);
+        vm.ThemeToastPageVisibility.Should().Be(Visibility.Collapsed);
+    }
+
+    [Fact]
+    public void SettingSameThemeMode_DoesNotShowToast()
+    {
+        // Arrange - MidnightViolet is already the default mode
+        SignalRPlaybackClient client = new();
+        LyricsViewModel vm = new(client, new ThemeManager(), new ResponsiveLayoutManager());
+
+        // Act
+        vm.SelectedThemeMode = ThemeMode.MidnightViolet;
+
+        // Assert
+        vm.ThemeToastStageVisibility.Should().Be(Visibility.Collapsed);
+        vm.ThemeToastPageVisibility.Should().Be(Visibility.Collapsed);
+    }
 }
 
