@@ -76,13 +76,6 @@ All settings can be configured via environment variables (using double-underscor
 | **`ForwardedHeaders__KnownProxies__0`** | `string[]` | *(empty)* | Additional proxy IP addresses to trust, beyond the default loopback. | No |
 | **`ForwardedHeaders__KnownNetworks__0`** | `string[]` | *(empty)* | Proxy networks to trust in CIDR form (e.g. `172.16.0.0/12` for a Docker bridge network). | No |
 
-### Playback Interpolator (`PlaybackInterpolator`)
-| Variable | Type | Default | Description | Required |
-| :--- | :---: | :---: | :--- | :---: |
-| **`PlaybackInterpolator__SeekThresholdMs`** | `int` | `2000` | Delta threshold (ms) beyond which progress changes are treated as seeks rather than drift. | No |
-| **`PlaybackInterpolator__DriftToleranceMs`** | `int` | `500` | Allowable drift (ms) before progressive correction steering engages. | No |
-| **`PlaybackInterpolator__DriftCorrectionFraction`** | `double` | `0.2` | Fraction of remaining drift corrected per calculation step. | No |
-
 ---
 
 ## Logging Configurations & CLI Parameters

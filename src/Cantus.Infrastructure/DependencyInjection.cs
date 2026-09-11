@@ -1,5 +1,4 @@
 using Cantus.Core.Interfaces;
-using Cantus.Infrastructure.Clock;
 using Cantus.Infrastructure.Lyrics;
 using Cantus.Infrastructure.Persistence;
 using Cantus.Infrastructure.Security;
@@ -36,8 +35,6 @@ public static class DependencyInjection
             configuration.GetSection(NeteaseOptions.SECTION_NAME));
         services.Configure<LyricsCacheOptions>(
             configuration.GetSection(LyricsCacheOptions.SECTION_NAME));
-        services.Configure<PlaybackInterpolatorOptions>(
-            configuration.GetSection(PlaybackInterpolatorOptions.SECTION_NAME));
 
         // 2. Persistence (SQLite EF Core)
         string connectionString = configuration.GetConnectionString("CantusDatabase")
@@ -52,7 +49,6 @@ public static class DependencyInjection
 
         // 4. Clock & Interpolation
         services.AddSingleton(TimeProvider.System);
-        services.AddTransient<IPlaybackInterpolator, PlaybackInterpolator>();
 
         // 5. Lyrics Services
         services.AddScoped<SqliteLyricsCacheRepository>();
