@@ -11,7 +11,7 @@ All settings can be configured via environment variables (using double-underscor
 ### Spotify Authentication
 | Variable | Type | Default | Description | Required |
 | :--- | :---: | :---: | :--- | :---: |
-| **`SPOTIFY_CLIENT_ID`** / **`Spotify__ClientId`** | `string` | — | 32-character Client ID from your Spotify Developer Dashboard. | **Yes** |
+| **`Spotify__ClientId`** | `string` | — | 32-character Client ID from your Spotify Developer Dashboard. | **Yes** |
 | **`CANTUS_HOST_URL`** | `string` | `http://localhost:5000` | Public root URL of your Cantus instance (used for OAuth redirect callbacks). | **Yes** |
 | **`Spotify__ClientSecret`** | `string` | — | Optional Spotify Client Secret (for developer override). | No |
 | **`Spotify__RedirectUri`** | `string` | `http://localhost:5000/api/auth/spotify/callback` | Default OAuth PKCE redirect URI. | No |
