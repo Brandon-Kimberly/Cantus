@@ -22,16 +22,40 @@
                 </StackPanel>
             </StackPanel>
 
-            <!-- Progress Bar & Text -->
-            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="32,0">
-                <ProgressBar Value="{x:Bind ViewModel.ProgressFraction, Mode=OneWay}"
+            <!-- Progress Bar (click to seek; hover shows a scrub thumb) -->
+            <Grid Grid.Column="1"
+                  Background="Transparent"
+                  MinHeight="18"
+                  VerticalAlignment="Center"
+                  Margin="32,0"
+                  PointerReleased="OnProgressBarPointerReleased"
+                  PointerEntered="OnSeekBarPointerEntered"
+                  PointerMoved="OnSeekBarPointerMoved"
+                  PointerExited="OnSeekBarPointerExited"
+                  ToolTipService.ToolTip="Seek">
+                <ProgressBar x:Name="SeekProgressBar"
+                             Value="{x:Bind ViewModel.ProgressFraction, Mode=OneWay}"
                              Minimum="0"
                              Maximum="1"
                              Foreground="{x:Bind ViewModel.PrimaryAccentBrush, Mode=OneWay}"
                              Background="#1AFFFFFF"
                              Height="4"
-                             CornerRadius="2" />
-            </StackPanel>
+                             CornerRadius="2"
+                             VerticalAlignment="Center"
+                             IsHitTestVisible="False" />
+                <Ellipse x:Name="SeekHoverThumb"
+                         Width="12"
+                         Height="12"
+                         Fill="{x:Bind ViewModel.PrimaryAccentBrush, Mode=OneWay}"
+                         Visibility="Collapsed"
+                         HorizontalAlignment="Left"
+                         VerticalAlignment="Center"
+                         IsHitTestVisible="False">
+                    <Ellipse.RenderTransform>
+                        <TranslateTransform x:Name="SeekHoverThumbTransform" />
+                    </Ellipse.RenderTransform>
+                </Ellipse>
+            </Grid>
 
             <!-- Timestamps -->
             <TextBlock Grid.Column="2" Text="{x:Bind ViewModel.ProgressText, Mode=OneWay}" FontSize="13" Foreground="{x:Bind ViewModel.TextMutedBrush, Mode=OneWay}" FontFamily="Consolas" VerticalAlignment="Center" Margin="0,0,16,0" />

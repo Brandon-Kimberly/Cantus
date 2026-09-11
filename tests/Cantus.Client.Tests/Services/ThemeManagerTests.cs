@@ -390,6 +390,20 @@ public sealed class ThemeManagerTests
         blue.B.Should().Be(255);
     }
 
+    [Theory]
+    [InlineData(ThemeMode.Dynamic, "Dynamic Palette")]
+    [InlineData(ThemeMode.MidnightViolet, "Midnight Violet")]
+    [InlineData(ThemeMode.EmeraldSynth, "Emerald Synth")]
+    [InlineData(ThemeMode.CyberpunkSunset, "Cyberpunk Sunset")]
+    [InlineData(ThemeMode.NordicSlate, "Nordic Slate")]
+    [InlineData(ThemeMode.OLEDMonochrome, "OLED Monochrome")]
+    [InlineData(ThemeMode.SolarizedDark, "Solarized Dark")]
+    public void GetDisplayName_ReturnsHumanReadableModeName(ThemeMode mode, string expectedName)
+    {
+        // Act & Assert
+        mode.GetDisplayName().Should().Be(expectedName);
+    }
+
     [Fact]
     public void RgbToHsl_RoundTripsWithHslToRgb()
     {

@@ -54,6 +54,12 @@ public sealed class PlaybackStatePayload
     [JsonPropertyName("volumePercent")]
     public int? VolumePercent { get; set; }
 
+    [JsonPropertyName("isShuffled")]
+    public bool IsShuffled { get; set; }
+
+    [JsonPropertyName("repeatMode")]
+    public string RepeatMode { get; set; } = "off";
+
     [JsonPropertyName("activeUserId")]
     public string? ActiveUserId { get; set; }
 
@@ -633,7 +639,22 @@ public sealed class SignalRPlaybackClient : ISignalRPlaybackClient
         }
     }
 
-    public async Task<PlayerCommandResult> SendPlayerCommandAsync(string command)
+    public Task<PlayerCommandResult> SendPlayerCommandAsync(string command)
+        => InvokePlayerActionAsync("SendPlayerCommand", command);
+
+    public Task<PlayerCommandResult> SetPlayerVolumeAsync(int volumePercent)
+        => InvokePlayerActionAsync("SetPlayerVolume", volumePercent);
+
+    public Task<PlayerCommandResult> SeekPlaybackAsync(long positionMs)
+        => InvokePlayerActionAsync("SeekPlayback", positionMs);
+
+    public Task<PlayerCommandResult> SetShuffleAsync(bool enabled)
+        => InvokePlayerActionAsync("SetShuffle", enabled);
+
+    public Task<PlayerCommandResult> SetRepeatAsync(string repeatMode)
+        => InvokePlayerActionAsync("SetRepeat", repeatMode);
+
+    private async Task<PlayerCommandResult> InvokePlayerActionAsync(string hubMethod, object argument)
     {
         if (_connection is not null && _connection.State == HubConnectionState.Connected)
         {
@@ -641,7 +662,8 @@ public sealed class SignalRPlaybackClient : ISignalRPlaybackClient
             {
                 // The hub returns the result as an int: the trimmed WASM build
                 // cannot deserialize enum return values from SignalR.
-                int result = await _connection.InvokeAsync<int>("SendPlayerCommand", command);
+                object? raw = await _connection.InvokeCoreAsync(hubMethod, typeof(int), new[] { argument });
+                int result = raw is int i ? i : (int)PlayerCommandResult.Failed;
                 return result >= (int)PlayerCommandResult.Success && result <= (int)PlayerCommandResult.Failed
                     ? (PlayerCommandResult)result
                     : PlayerCommandResult.Failed;

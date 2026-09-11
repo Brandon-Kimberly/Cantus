@@ -8,4 +8,8 @@ public sealed record PlaybackState
     public DateTimeOffset TimestampUtc { get; init; }
     public string? DeviceName { get; init; }
     public int? VolumePercent { get; init; }
+    public bool IsShuffled { get; init; }
+
+    /// <summary>Spotify repeat state: "off", "track", or "context".</summary>
+    public string RepeatMode { get; init; } = "off";
 }
