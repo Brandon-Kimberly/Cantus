@@ -64,13 +64,6 @@ All settings can be configured via environment variables (using double-underscor
 | :--- | :---: | :---: | :--- | :---: |
 | **`LyricsCache__NegativeCacheDays`** | `int` | `30` | Duration in days to cache negative lookups (instrumental tracks / not found across all providers). | No |
 
-### Playback Interpolator (`PlaybackInterpolator`)
-| Variable | Type | Default | Description | Required |
-| :--- | :---: | :---: | :--- | :---: |
-| **`PlaybackInterpolator__SeekThresholdMs`** | `int` | `2000` | Delta threshold (ms) beyond which progress changes are treated as seeks rather than drift. | No |
-| **`PlaybackInterpolator__DriftToleranceMs`** | `int` | `500` | Allowable drift (ms) before progressive correction steering engages. | No |
-| **`PlaybackInterpolator__DriftCorrectionFraction`** | `double` | `0.2` | Fraction of remaining drift corrected per calculation step. | No |
-
 ---
 
 ## Logging Configurations & CLI Parameters
