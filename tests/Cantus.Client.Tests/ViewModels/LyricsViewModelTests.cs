@@ -431,6 +431,94 @@ public sealed class LyricsViewModelTests
     }
 
     [Fact]
+    public void ShuffleAndRepeatState_UpdateFromPlaybackPayload()
+    {
+        // Arrange
+        SignalRPlaybackClient client = new();
+        LyricsViewModel vm = new(client);
+        vm.IsShuffled.Should().BeFalse();
+        vm.RepeatMode.Should().Be("off");
+
+        // Act
+        client.RaisePlaybackStateReceived(new PlaybackStatePayload
+        {
+            CurrentTrack = new TrackInfoPayload { Id = "t-1", Title = "Song", Artist = "Artist" },
+            IsPlaying = true,
+            IsShuffled = true,
+            RepeatMode = "context",
+            TimestampUtc = DateTimeOffset.UtcNow
+        });
+
+        // Assert
+        vm.IsShuffled.Should().BeTrue();
+        vm.RepeatMode.Should().Be("context");
+    }
+
+    [Fact]
+    public void RepeatGlyphAndButtonBrushes_TrackState()
+    {
+        // Arrange
+        SignalRPlaybackClient client = new();
+        LyricsViewModel vm = new(client);
+
+        // Off: repeat-all glyph, muted brushes
+        vm.RepeatGlyph.Should().Be("\uE8EE");
+        vm.RepeatButtonForeground.Should().BeSameAs(vm.TextMutedBrush);
+        vm.ShuffleButtonForeground.Should().BeSameAs(vm.TextMutedBrush);
+
+        // Context: still the repeat-all glyph, accent brush
+        vm.RepeatMode = "context";
+        vm.RepeatGlyph.Should().Be("\uE8EE");
+        vm.RepeatButtonForeground.Should().BeSameAs(vm.PrimaryAccentBrush);
+
+        // Track: repeat-one glyph
+        vm.RepeatMode = "track";
+        vm.RepeatGlyph.Should().Be("\uE8ED");
+
+        vm.IsShuffled = true;
+        vm.ShuffleButtonForeground.Should().BeSameAs(vm.PrimaryAccentBrush);
+    }
+
+    [Fact]
+    public async Task ShuffleRepeatSeek_WhenCommandFails_DoNotChangeStateAndDoNotThrow()
+    {
+        // Arrange - disconnected client, so every command fails
+        SignalRPlaybackClient client = new();
+        LyricsViewModel vm = new(client);
+        client.RaisePlaybackStateReceived(new PlaybackStatePayload
+        {
+            CurrentTrack = new TrackInfoPayload { Id = "t-1", Title = "Song", Artist = "Artist", DurationMs = 200000 },
+            IsPlaying = true,
+            TimestampUtc = DateTimeOffset.UtcNow
+        });
+
+        // Act
+        await vm.ToggleShuffleAsync();
+        await vm.CycleRepeatAsync();
+        await vm.SeekToFractionAsync(0.5);
+
+        // Assert - no optimistic flips without success
+        vm.IsShuffled.Should().BeFalse();
+        vm.RepeatMode.Should().Be("off");
+        vm.TransportStatusText.Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public void VolumeText_MapsPercentAndUnknown()
+    {
+        SignalRPlaybackClient client = new();
+        LyricsViewModel vm = new(client);
+
+        vm.VolumeText.Should().Be("—", "no playback state yet");
+        vm.VolumePercent = 65;
+        vm.VolumeText.Should().Be("65%");
+        vm.VolumeSliderValue.Should().Be(65);
+
+        // The debounce entry point clamps and never throws headless.
+        vm.RequestVolumeChange(150);
+    }
+
+    [Fact]
     public void ServerBaseUrl_DerivesBaseUrlFromClient()
     {
         // Arrange
@@ -957,6 +1045,25 @@ public sealed class LyricsViewModelTests
         // Assert
         vm.ThemeToastStageVisibility.Should().Be(Visibility.Collapsed);
         vm.ThemeToastPageVisibility.Should().Be(Visibility.Collapsed);
+    }
+
+    [Fact]
+    public void ThemeChange_RaisesPropertyChanged_ForShuffleAndRepeatForegrounds()
+    {
+        // Arrange
+        SignalRPlaybackClient client = new();
+        ThemeManager themeManager = new();
+        LyricsViewModel vm = new(client, themeManager, new ResponsiveLayoutManager());
+
+        List<string> notified = new();
+        vm.PropertyChanged += (s, e) => notified.Add(e.PropertyName ?? string.Empty);
+
+        // Act
+        themeManager.SetThemeMode(ThemeMode.EmeraldSynth);
+
+        // Assert
+        notified.Should().Contain(nameof(LyricsViewModel.ShuffleButtonForeground));
+        notified.Should().Contain(nameof(LyricsViewModel.RepeatButtonForeground));
     }
 }
 

@@ -78,7 +78,9 @@ public sealed class SpotifyPlayerClient : ISpotifyPlayerClient
                 IsPlaying = playback.IsPlaying,
                 TimestampUtc = serverSnapshotTimestamp,
                 DeviceName = playback.Device?.Name,
-                VolumePercent = playback.Device?.VolumePercent
+                VolumePercent = playback.Device?.VolumePercent,
+                IsShuffled = playback.ShuffleState,
+                RepeatMode = playback.RepeatState ?? "off"
             };
         }
         catch (APIUnauthorizedException)
@@ -128,6 +130,54 @@ public sealed class SpotifyPlayerClient : ISpotifyPlayerClient
             accessToken,
             "previous",
             spotify => spotify.Player.SkipPrevious(new PlayerSkipPreviousRequest(), cancellationToken));
+    }
+
+    public Task<PlayerCommandResult> SetVolumeAsync(string accessToken, int volumePercent, CancellationToken cancellationToken = default)
+    {
+        int clamped = Math.Clamp(volumePercent, 0, 100);
+        return ExecutePlayerCommandAsync(
+            accessToken,
+            "volume",
+            spotify => spotify.Player.SetVolume(new PlayerVolumeRequest(clamped), cancellationToken));
+    }
+
+    public Task<PlayerCommandResult> SeekPlaybackAsync(string accessToken, long positionMs, CancellationToken cancellationToken = default)
+    {
+        long clamped = Math.Max(0, positionMs);
+        return ExecutePlayerCommandAsync(
+            accessToken,
+            "seek",
+            spotify => spotify.Player.SeekTo(new PlayerSeekToRequest(clamped), cancellationToken));
+    }
+
+    public Task<PlayerCommandResult> SetShuffleAsync(string accessToken, bool enabled, CancellationToken cancellationToken = default)
+    {
+        return ExecutePlayerCommandAsync(
+            accessToken,
+            "shuffle",
+            spotify => spotify.Player.SetShuffle(new PlayerShuffleRequest(enabled), cancellationToken));
+    }
+
+    public Task<PlayerCommandResult> SetRepeatAsync(string accessToken, string repeatMode, CancellationToken cancellationToken = default)
+    {
+        PlayerSetRepeatRequest.State? state = repeatMode switch
+        {
+            "off" => PlayerSetRepeatRequest.State.Off,
+            "track" => PlayerSetRepeatRequest.State.Track,
+            "context" => PlayerSetRepeatRequest.State.Context,
+            _ => null
+        };
+
+        if (state is null)
+        {
+            _logger.LogWarning("Ignoring unknown repeat mode {RepeatMode}", repeatMode);
+            return Task.FromResult(PlayerCommandResult.Failed);
+        }
+
+        return ExecutePlayerCommandAsync(
+            accessToken,
+            "repeat",
+            spotify => spotify.Player.SetRepeat(new PlayerSetRepeatRequest(state.Value), cancellationToken));
     }
 
     private async Task<PlayerCommandResult> ExecutePlayerCommandAsync(

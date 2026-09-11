@@ -34,6 +34,10 @@ public interface ISignalRPlaybackClient : IAsyncDisposable
     Task SyncClockAsync();
     Task SetTrackOffsetAsync(string trackId, int offsetMs);
     Task<PlayerCommandResult> SendPlayerCommandAsync(string command);
+    Task<PlayerCommandResult> SetPlayerVolumeAsync(int volumePercent);
+    Task<PlayerCommandResult> SeekPlaybackAsync(long positionMs);
+    Task<PlayerCommandResult> SetShuffleAsync(bool enabled);
+    Task<PlayerCommandResult> SetRepeatAsync(string repeatMode);
     Task SubscribeToUserAsync(string? userId);
     Task LogoutAsync();
     Task ReconnectWithTokenAsync(string? sessionToken);

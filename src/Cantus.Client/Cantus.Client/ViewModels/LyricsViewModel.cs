@@ -61,6 +61,12 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
     private readonly DispatcherTimer _transportStatusTimer;
     private string _transportStatusText = string.Empty;
 
+    private const int VOLUME_DEBOUNCE_MS = 300;
+    private readonly DispatcherTimer _volumeDebounceTimer;
+    private int _pendingVolumePercent;
+    private bool _isShuffled;
+    private string _repeatMode = "off";
+
     private double _progressFraction;
     private string _progressText = "00:00";
     private string _totalDurationText = "00:00";
@@ -345,6 +351,130 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
         }
     }
 
+    public bool IsShuffled
+    {
+        get => _isShuffled;
+        set
+        {
+            if (_isShuffled != value)
+            {
+                _isShuffled = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(ShuffleButtonForeground));
+            }
+        }
+    }
+
+    /// <summary>Spotify repeat state: "off", "track", or "context".</summary>
+    public string RepeatMode
+    {
+        get => _repeatMode;
+        set
+        {
+            if (_repeatMode != value)
+            {
+                _repeatMode = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(RepeatGlyph));
+                OnPropertyChanged(nameof(RepeatButtonForeground));
+            }
+        }
+    }
+
+    public string RepeatGlyph => _repeatMode == "track" ? "\uE8ED" : "\uE8EE";
+
+    public Microsoft.UI.Xaml.Media.SolidColorBrush ShuffleButtonForeground =>
+        _isShuffled ? _themeManager.PrimaryAccentBrush : _themeManager.TextMutedBrush;
+
+    public Microsoft.UI.Xaml.Media.SolidColorBrush RepeatButtonForeground =>
+        _repeatMode != "off" ? _themeManager.PrimaryAccentBrush : _themeManager.TextMutedBrush;
+
+    public double VolumeSliderValue => _volumePercent ?? 0;
+
+    public string VolumeText => _volumePercent is int v ? $"{v}%" : "—";
+
+    public async Task ToggleShuffleAsync()
+    {
+        if (_lastPlaybackState?.CurrentTrack is null)
+        {
+            return;
+        }
+
+        bool target = !IsShuffled;
+        PlayerCommandResult result = await _client.SetShuffleAsync(target);
+        if (result == PlayerCommandResult.Success)
+        {
+            IsShuffled = target;
+        }
+
+        ReportTransportResult(result);
+    }
+
+    /// <summary>Cycles repeat the way Spotify's own client does: off, then all ("context"), then one ("track").</summary>
+    public async Task CycleRepeatAsync()
+    {
+        if (_lastPlaybackState?.CurrentTrack is null)
+        {
+            return;
+        }
+
+        string next = RepeatMode switch
+        {
+            "off" => "context",
+            "context" => "track",
+            _ => "off"
+        };
+
+        PlayerCommandResult result = await _client.SetRepeatAsync(next);
+        if (result == PlayerCommandResult.Success)
+        {
+            RepeatMode = next;
+        }
+
+        ReportTransportResult(result);
+    }
+
+    public async Task SeekToFractionAsync(double fraction)
+    {
+        TrackInfoPayload? track = _lastPlaybackState?.CurrentTrack;
+        if (track is null || track.DurationMs <= 0)
+        {
+            return;
+        }
+
+        double clamped = Math.Clamp(fraction, 0.0, 1.0);
+        long positionMs = (long)(clamped * track.DurationMs);
+        ReportTransportResult(await _client.SeekPlaybackAsync(positionMs));
+    }
+
+    /// <summary>
+    /// Called for every slider tick while the user drags, so the actual
+    /// Spotify call is debounced: only the value the slider rests on is sent.
+    /// </summary>
+    public void RequestVolumeChange(int volumePercent)
+    {
+        _pendingVolumePercent = Math.Clamp(volumePercent, 0, 100);
+        _volumeDebounceTimer.Stop();
+        _volumeDebounceTimer.Start();
+    }
+
+    private async void OnVolumeDebounceTick(object? sender, object e)
+    {
+        _volumeDebounceTimer.Stop();
+        if (_lastPlaybackState?.CurrentTrack is null)
+        {
+            return;
+        }
+
+        PlayerCommandResult result = await _client.SetPlayerVolumeAsync(_pendingVolumePercent);
+        if (result == PlayerCommandResult.Success)
+        {
+            VolumePercent = _pendingVolumePercent;
+        }
+
+        ReportTransportResult(result);
+    }
+
     public string DeviceName
     {
         get => _deviceName;
@@ -354,7 +484,7 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
     public int? VolumePercent
     {
         get => _volumePercent;
-        set { if (_volumePercent != value) { _volumePercent = value; OnPropertyChanged(); } }
+        set { if (_volumePercent != value) { _volumePercent = value; OnPropertyChanged(); OnPropertyChanged(nameof(VolumeSliderValue)); OnPropertyChanged(nameof(VolumeText)); } }
     }
 
     public double ProgressFraction
@@ -684,6 +814,13 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
             Interval = TimeSpan.FromMilliseconds(TRANSPORT_STATUS_DURATION_MS)
         };
         _transportStatusTimer.Tick += (s, e) => HideTransportStatus();
+
+        _volumeDebounceTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(VOLUME_DEBOUNCE_MS)
+        };
+        _volumeDebounceTimer.Tick += OnVolumeDebounceTick;
+
         _themeToastTimer = new DispatcherTimer
         {
             Interval = TimeSpan.FromMilliseconds(THEME_TOAST_DURATION_MS)
@@ -878,6 +1015,8 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(ActivePrimaryAccentColor));
         OnPropertyChanged(nameof(ActiveBackgroundColor));
         OnPropertyChanged(nameof(Theme));
+        OnPropertyChanged(nameof(ShuffleButtonForeground));
+        OnPropertyChanged(nameof(RepeatButtonForeground));
     }
 
     public void RefreshLyricLineSizes()
@@ -910,6 +1049,8 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
             IsPlaying = false;
             DeviceName = "No Device";
             VolumePercent = null;
+            IsShuffled = false;
+            RepeatMode = "off";
             _themeManager.UpdateTrackMetadata(null, null, null);
             NotifyEmptyStateText();
             return;
@@ -923,6 +1064,8 @@ public sealed class LyricsViewModel : INotifyPropertyChanged
         IsPlaying = state.IsPlaying;
         DeviceName = state.DeviceName ?? "Spotify";
         VolumePercent = state.VolumePercent;
+        IsShuffled = state.IsShuffled;
+        RepeatMode = state.RepeatMode;
         NotifyEmptyStateText();
         if (!string.IsNullOrEmpty(state.ActiveUserDisplayName))
         {

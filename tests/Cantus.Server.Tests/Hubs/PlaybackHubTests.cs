@@ -310,6 +310,72 @@ public sealed class PlaybackHubTests
         _mockRegistry.Verify(r => r.RequestUserActivity(It.IsAny<string>()), Times.Never);
     }
 
+    [Fact]
+    public async Task SetPlayerVolume_WhenSubscribedWithSession_PassesValueAndRequestsRefresh()
+    {
+        ArrangeSubscribedSession();
+        _mockPlayerClient.Setup(p => p.SetVolumeAsync("access-token-1", 65, default))
+            .ReturnsAsync(PlayerCommandResult.Success);
+
+        int result = await _hub.SetPlayerVolume(65);
+
+        result.Should().Be((int)PlayerCommandResult.Success);
+        _mockPlayerClient.Verify(p => p.SetVolumeAsync("access-token-1", 65, default), Times.Once);
+        _mockRegistry.Verify(r => r.RequestUserActivity("user-1"), Times.AtLeastOnce);
+    }
+
+    [Fact]
+    public async Task SeekPlayback_WhenSpotifyRejects_PropagatesResultWithoutRefresh()
+    {
+        ArrangeSubscribedSession();
+        _mockPlayerClient.Setup(p => p.SeekPlaybackAsync("access-token-1", 30000, default))
+            .ReturnsAsync(PlayerCommandResult.NoActiveDevice);
+
+        int result = await _hub.SeekPlayback(30000);
+
+        result.Should().Be((int)PlayerCommandResult.NoActiveDevice);
+        _mockRegistry.Verify(r => r.RequestUserActivity(It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task SetShuffle_WhenNotSubscribed_FailsWithoutCallingSpotify()
+    {
+        _mockRegistry.Setup(r => r.GetConnectionSubscription("test-conn-id")).Returns((string?)null);
+
+        int result = await _hub.SetShuffle(true);
+
+        result.Should().Be((int)PlayerCommandResult.Failed);
+        _mockPlayerClient.Verify(
+            p => p.SetShuffleAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task SetRepeat_WhenSubscribedWithSession_PassesModeThrough()
+    {
+        ArrangeSubscribedSession();
+        _mockPlayerClient.Setup(p => p.SetRepeatAsync("access-token-1", "track", default))
+            .ReturnsAsync(PlayerCommandResult.Success);
+
+        int result = await _hub.SetRepeat("track");
+
+        result.Should().Be((int)PlayerCommandResult.Success);
+        _mockPlayerClient.Verify(p => p.SetRepeatAsync("access-token-1", "track", default), Times.Once);
+    }
+
+    private void ArrangeSubscribedSession()
+    {
+        _mockRegistry.Setup(r => r.GetConnectionSubscription("test-conn-id")).Returns("user-1");
+        _mockAuthService.Setup(a => a.GetSessionAsync("user-1", default)).ReturnsAsync(new UserSession
+        {
+            Id = "user-1",
+            SpotifyUserId = "sp-1",
+            DisplayName = "Alice",
+            AccessToken = "access-token-1",
+            RefreshToken = "ref"
+        });
+    }
+
     private sealed class RequestCookieCollection : IRequestCookieCollection
     {
         private readonly Dictionary<string, string> _dict;
