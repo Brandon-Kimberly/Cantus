@@ -68,6 +68,14 @@ public sealed partial class LyricsStageView : UserControl
         {
             if (e.OldValue is LyricsViewModel oldVm)
             {
+                // Animations and the guard index belong to the outgoing view
+                // model's containers: leaving them running would animate items
+                // that no longer exist, and a stale index would suppress the
+                // activation animation for the incoming model's first line.
+                view._activationStoryboard?.Stop();
+                view._deactivationStoryboard?.Stop();
+                view._lastAnimatedIndex = -1;
+
                 oldVm.AutoScrollResumed -= view.OnAutoScrollResumed;
                 oldVm.LyricsReloaded -= view.OnLyricsReloaded;
             }
