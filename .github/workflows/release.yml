@@ -70,6 +70,22 @@ jobs:
           echo "- **Semantic Version**: \`${CLEAN_VER}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Pre-release**: \`${IS_PRERELEASE}\`" >> $GITHUB_STEP_SUMMARY
 
+      # The draft release is created before any build runs so that each matrix
+      # job can attach its own packages directly, rather than pushing ~750 MB
+      # through artifact storage for one job to download again.
+      - name: Create Draft Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.meta.outputs.TAG }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; assets will be added to it."
+          else
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
+              --draft --generate-notes --title "$TAG"
+          fi
+
   # ============================================================================
   # 1. Multi-Architecture Container Publishing (GHCR)
   # ============================================================================
@@ -128,6 +144,8 @@ jobs:
     name: Build Desktop Client (${{ matrix.name }})
     needs: [prepare]
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -196,11 +214,36 @@ jobs:
           mkdir -p ./artifacts
           tar -czvf "./artifacts/Cantus.Client-macOS-${{ matrix.rid }}.tar.gz" -C ./publish .
 
-      - name: Upload Desktop Artifacts
+      # Checksums are produced here, next to the files, so the finalize job never
+      # needs to re-download the binaries to hash them.
+      - name: Attach Packages to Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          set -euo pipefail
+          cd ./artifacts
+          if command -v sha256sum >/dev/null 2>&1; then
+            HASH="sha256sum"
+          else
+            HASH="shasum -a 256"
+          fi
+          : > "../CHECKSUMS-desktop-${{ matrix.name }}.txt"
+          for f in *; do
+            [ -f "$f" ] || continue
+            $HASH "$f" >> "../CHECKSUMS-desktop-${{ matrix.name }}.txt"
+            gh release upload "$TAG" "$f" --repo "$GITHUB_REPOSITORY" --clobber
+          done
+          cat "../CHECKSUMS-desktop-${{ matrix.name }}.txt"
+
+      - name: Upload Checksum Fragment
         uses: actions/upload-artifact@v4
         with:
-          name: desktop-artifacts-${{ matrix.name }}
-          path: ./artifacts/*
+          name: checksums-desktop-${{ matrix.name }}
+          path: ./CHECKSUMS-desktop-${{ matrix.name }}.txt
+          retention-days: 7
+          if-no-files-found: error
 
   # ============================================================================
   # 3. Standalone Server Binaries Matrix (Bare-Metal Deployments)
@@ -209,6 +252,8 @@ jobs:
     name: Build Server Binary (${{ matrix.name }})
     needs: [prepare]
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -282,11 +327,36 @@ jobs:
           New-Item -ItemType Directory -Force -Path ./artifacts
           Compress-Archive -Path ./server_dist/* -DestinationPath ./artifacts/Cantus.Server-Windows-x64.zip
 
-      - name: Upload Server Artifacts
+      # Checksums are produced here, next to the files, so the finalize job never
+      # needs to re-download the binaries to hash them.
+      - name: Attach Packages to Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          set -euo pipefail
+          cd ./artifacts
+          if command -v sha256sum >/dev/null 2>&1; then
+            HASH="sha256sum"
+          else
+            HASH="shasum -a 256"
+          fi
+          : > "../CHECKSUMS-server-${{ matrix.name }}.txt"
+          for f in *; do
+            [ -f "$f" ] || continue
+            $HASH "$f" >> "../CHECKSUMS-server-${{ matrix.name }}.txt"
+            gh release upload "$TAG" "$f" --repo "$GITHUB_REPOSITORY" --clobber
+          done
+          cat "../CHECKSUMS-server-${{ matrix.name }}.txt"
+
+      - name: Upload Checksum Fragment
         uses: actions/upload-artifact@v4
         with:
-          name: server-artifacts-${{ matrix.name }}
-          path: ./artifacts/*
+          name: checksums-server-${{ matrix.name }}
+          path: ./CHECKSUMS-server-${{ matrix.name }}.txt
+          retention-days: 7
+          if-no-files-found: error
 
   # ============================================================================
   # 4. GitHub Release Publishing & Asset Aggregation
@@ -295,30 +365,41 @@ jobs:
     name: Create GitHub Release
     needs: [prepare, publish-docker, build-desktop-clients, build-server-binaries]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Download All Artifacts
+      # Only the small checksum fragments travel through artifact storage; the
+      # packages themselves are already attached to the draft release.
+      - name: Download Checksum Fragments
         uses: actions/download-artifact@v4
         with:
-          path: ./all_artifacts
+          pattern: checksums-*
+          path: ./checksums
           merge-multiple: true
 
-      - name: Generate Checksums
+      - name: Aggregate Checksums
         shell: bash
         run: |
-          cd ./all_artifacts
-          sha256sum * > SHA256SUMS.txt
+          set -euo pipefail
+          cat ./checksums/CHECKSUMS-*.txt | sort -k2 > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ needs.prepare.outputs.tag }}
-          files: |
-            ./all_artifacts/*
-          generate_release_notes: true
-          draft: false
-          prerelease: ${{ needs.prepare.outputs.is_prerelease == 'true' }}
+      - name: Publish Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          IS_PRERELEASE: ${{ needs.prepare.outputs.is_prerelease }}
+        run: |
+          set -euo pipefail
+          gh release upload "$TAG" SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --clobber
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --draft=false --prerelease="$IS_PRERELEASE"
+          {
+            echo "### 📦 Published $TAG"
+            gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
+              --json assets --jq '.assets[] | "- \(.name) (\(.size) bytes)"'
+          } >> "$GITHUB_STEP_SUMMARY"
