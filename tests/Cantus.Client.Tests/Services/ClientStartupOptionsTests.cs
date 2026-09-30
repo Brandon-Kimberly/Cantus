@@ -21,6 +21,10 @@ public sealed class ClientStartupOptionsTests : IDisposable
     [InlineData("http://192.168.0.10:5000/", "http://192.168.0.10:5000/hubs/playback")]
     [InlineData("https://lyrics.example.com", "https://lyrics.example.com/hubs/playback")]
     [InlineData("  http://192.168.0.10:5000  ", "http://192.168.0.10:5000/hubs/playback")]
+    [InlineData("http://192.168.0.10:5000?x=1", "http://192.168.0.10:5000/hubs/playback")]
+    [InlineData("http://192.168.0.10:5000#top", "http://192.168.0.10:5000/hubs/playback")]
+    [InlineData("http://192.168.0.10:5000/?next=/hubs/playback", "http://192.168.0.10:5000/hubs/playback")]
+    [InlineData("https://example.com/cantus/", "https://example.com/cantus/hubs/playback")]
     public void TrySetServerUrl_BaseAddress_AppendsHubPath(string input, string expected)
     {
         bool accepted = ClientStartupOptions.TrySetServerUrl(input);
@@ -29,10 +33,12 @@ public sealed class ClientStartupOptionsTests : IDisposable
         ClientStartupOptions.ServerUrl.Should().Be(expected);
     }
 
-    [Fact]
-    public void TrySetServerUrl_FullHubUrl_IsLeftAlone()
+    [Theory]
+    [InlineData("http://192.168.0.10:5000/hubs/playback")]
+    [InlineData("http://192.168.0.10:5000/hubs/playback/")]
+    public void TrySetServerUrl_FullHubUrl_IsLeftAlone(string input)
     {
-        bool accepted = ClientStartupOptions.TrySetServerUrl("http://192.168.0.10:5000/hubs/playback");
+        bool accepted = ClientStartupOptions.TrySetServerUrl(input);
 
         accepted.Should().BeTrue();
         ClientStartupOptions.ServerUrl.Should().Be("http://192.168.0.10:5000/hubs/playback");
@@ -70,6 +76,6 @@ public sealed class ClientStartupOptionsTests : IDisposable
     {
         SignalRPlaybackClient client = new(ClientStartupOptions.ServerUrl);
 
-        client.ServerBaseUrl.Should().Be("http://localhost:5000");
+        client.ServerBaseUrl.Should().Be("http://127.0.0.1:5000");
     }
 }

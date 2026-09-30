@@ -37,19 +37,17 @@ internal class Program
         LoggingConfiguration loggingConfig = ClientLoggingManager.ParseConfiguration(logConfigRaw);
         App.InitializeLogging(loggingConfig);
 
-        // Without this the desktop client always targets localhost:5000, so it
-        // cannot reach a Cantus server on another machine - and Spotify no
-        // longer accepts localhost as a redirect URI host, which left the
-        // desktop login flow with nowhere to go.
         string? serverUrlValue = parseResult.GetValue(serverUrlOption);
-        string? serverUrlRaw = !string.IsNullOrWhiteSpace(serverUrlValue)
+        bool fromCli = !string.IsNullOrWhiteSpace(serverUrlValue);
+        string? serverUrlRaw = fromCli
             ? serverUrlValue
             : Environment.GetEnvironmentVariable("CANTUS_SERVER_URL");
 
         if (!string.IsNullOrWhiteSpace(serverUrlRaw) && !ClientStartupOptions.TrySetServerUrl(serverUrlRaw))
         {
+            string source = fromCli ? "--server-url" : "CANTUS_SERVER_URL";
             Console.Error.WriteLine(
-                "Ignoring invalid --server-url value: expected an absolute http(s) URL.");
+                $"Ignoring invalid {source} value: expected an absolute http(s) URL.");
         }
 
         UnoPlatformHostBuilder.Create()
