@@ -56,9 +56,9 @@ Verify that changes strictly respect the 5 architectural layers and dependency f
 ### Layer Rules & Invariants:
 1. **Core Domain Layer (`src/Cantus.Core`)**:
    - Must remain **pure .NET Standard / .NET 9** with **zero external framework dependencies** (no EF Core, ASP.NET Core, SignalR, or Uno Platform references).
-   - Contains domain models (`PlaybackState`, `SyncedLyrics`, `LyricLine`), parsing algorithms (`LrcParser`), and abstract interfaces (`ILyricsProvider`, `ILyricsCacheRepository`, `ISpotifyAuthService`, `ISpotifyPlayerClient`, `IPlaybackInterpolator`).
+   - Contains domain models (`PlaybackState`, `SyncedLyrics`, `LyricLine`), parsing algorithms (`LrcParser`), and abstract interfaces (`ILyricsProvider`, `ILyricsCacheRepository`, `ISpotifyAuthService`, `ISpotifyPlayerClient`).
 2. **Infrastructure & Persistence Layer (`src/Cantus.Infrastructure`)**:
-   - Implements Core interfaces using external libraries (`CantusDbContext`, `SqliteLyricsCacheRepository`, `SpotifyAuthService`, `LrclibLyricsProvider`, `DataProtectionTokenEncryptionService`, `PlaybackInterpolator`).
+   - Implements Core interfaces using external libraries (`CantusDbContext`, `SqliteLyricsCacheRepository`, `SpotifyAuthService`, `LrclibLyricsProvider`, `DataProtectionTokenEncryptionService`).
    - Must depend on `Cantus.Core`, never on `Cantus.Server` or `Cantus.Client`.
 3. **Server Engine & Real-Time Hub (`src/Cantus.Server`)**:
    - Coordinates active users via `ActiveUsersPlaybackMonitor`, hosts `PlaybackHub` (SignalR), and exposes Minimal API endpoints.
