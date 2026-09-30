@@ -47,7 +47,7 @@ public static class DependencyInjection
         services.AddDataProtection();
         services.AddSingleton<ITokenEncryptionService, DataProtectionTokenEncryptionService>();
 
-        // 4. Clock & Interpolation
+        // 4. Clock
         services.AddSingleton(TimeProvider.System);
 
         // 5. Lyrics Services
