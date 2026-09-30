@@ -459,7 +459,7 @@ def update_domain_graph(commit_hash: str, timestamp: str) -> Dict[str, Any]:
         "step:ntp-clock-synchronization:send-ntp-ping": ("src/Cantus.Client/Cantus.Client/Services/SignalRPlaybackClient.cs", [537, 563]),
         "step:ntp-clock-synchronization:server-ntp-timestamp": ("src/Cantus.Server/Hubs/PlaybackHub.cs", [152, 161]),
         "step:ntp-clock-synchronization:compute-skew-and-rtt": ("src/Cantus.Client/Cantus.Client/Services/SignalRPlaybackClient.cs", [565, 615]),
-        "step:real-time-lyrics-scrolling:interpolate-playback-clock": ("src/Cantus.Infrastructure/Clock/PlaybackInterpolator.cs", [23, 116]),
+        "step:real-time-lyrics-scrolling:interpolate-playback-clock": ("src/Cantus.Client/Cantus.Client/ViewModels/LyricsViewModel.cs", [1384, 1456]),
         "step:real-time-lyrics-scrolling:calculate-active-lyric-line": ("src/Cantus.Core/Models/SyncedLyrics.cs", [14, 46]),
         "step:real-time-lyrics-scrolling:update-ui-and-theme": ("src/Cantus.Client/Cantus.Client/ViewModels/LyricsViewModel.cs", [869, 950]),
         "step:real-time-lyrics-scrolling:manual-scroll-detection-and-resume": ("src/Cantus.Client/Cantus.Client/Views/LyricsStageView.xaml.cs", [37, 105]),
